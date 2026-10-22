@@ -1,0 +1,535 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kanban Grist (multi-espaces)</title>
+<script src="https://docs.getgrist.com/grist-plugin-api.js"></script>
+<style>
+  :root { --bg:#f4f5f7; --col:#eeeef0; --card:#fff; --txt:#161616; --muted:#666; --accent:#3a55d8; }
+  * { box-sizing:border-box; }
+  body { margin:0; font-family:"Marianne","Segoe UI",Arial,sans-serif; background:var(--bg); color:var(--txt); font-size:13px; }
+  header { position:sticky; top:0; z-index:5; background:#fff; border-bottom:1px solid #ddd; padding:8px 12px; display:flex; flex-wrap:wrap; gap:6px; align-items:center; }
+  header select, header input { font:inherit; padding:4px 6px; border:1px solid #ccc; border-radius:4px; background:#fff; max-width:150px; }
+  header input[type=search] { width:150px; }
+  header label { color:var(--muted); font-size:12px; display:flex; align-items:center; gap:3px; }
+  header button { font:inherit; border:1px solid #ccc; background:#fff; border-radius:4px; padding:4px 8px; cursor:pointer; }
+  header .spacer { flex:1; }
+  #board { display:flex; gap:12px; padding:12px; align-items:flex-start; overflow-x:auto; min-height:calc(100vh - 60px); }
+  .col { flex:0 0 280px; background:var(--col); border-radius:6px; padding:8px; box-shadow:0 1px 2px rgba(0,0,0,.15); }
+  .col.over { outline:2px dashed var(--accent); }
+  .col h2 { margin:2px 4px 8px; font-size:15px; display:flex; align-items:center; gap:8px; }
+  .dot { width:14px; height:14px; border-radius:50%; flex:none; }
+  .count { margin-left:auto; background:#dde0e6; border-radius:10px; font-size:11px; padding:1px 7px; }
+  .card { background:var(--card); border-radius:4px; padding:9px 10px; margin-bottom:8px; box-shadow:0 1px 2px rgba(0,0,0,.18); cursor:grab; }
+  .card:hover { box-shadow:0 2px 6px rgba(0,0,0,.28); }
+  .card.dragging { opacity:.4; }
+  .tags { display:flex; flex-wrap:wrap; gap:4px; margin-bottom:6px; }
+  .tag { font-size:11px; font-weight:700; padding:2px 6px; border-radius:3px; white-space:nowrap; }
+  .tag .x { margin-left:3px; opacity:.45; cursor:pointer; }
+  .tag .x:hover { opacity:1; }
+  .tag.space { border-radius:10px; }
+  .addtag { font-size:11px; padding:2px 7px; border:1px dashed #aab; border-radius:3px; color:#667; cursor:pointer; white-space:nowrap; }
+  .addtag:hover { background:#eef1ff; color:var(--accent); border-color:var(--accent); }
+  .title { font-size:14px; line-height:1.3; margin:2px 0 8px; }
+  .meta { display:flex; flex-wrap:wrap; align-items:center; gap:7px; color:var(--muted); font-size:12px; }
+  .date { font-weight:700; padding:1px 6px; border-radius:3px; }
+  .d-ok { background:#c9f0d4; color:#1d6b35; }
+  .d-orange { background:#ffe0b8; color:#9a4f00; }
+  .d-red { background:#ffc9cc; color:#a3121d; }
+  .d-grey { background:#e6e8ec; color:#555; }
+  .avatars { margin-left:auto; display:flex; }
+  .av { width:26px; height:26px; border-radius:50%; background:#c99a14; color:#fff; font-size:10px; font-weight:700; display:flex; align-items:center; justify-content:center; margin-left:-6px; border:2px solid #fff; }
+  .add { color:var(--accent); font-weight:600; cursor:pointer; padding:6px 4px; background:none; border:0; font:inherit; font-weight:600; }
+  .vote, .tosuivi, .tobacklog, .move { border:1px solid #ccc; background:#fafafa; border-radius:12px; padding:1px 8px; cursor:pointer; font:inherit; font-size:12px; }
+  .vote:hover, .move:hover { background:#eaf0ff; }
+  .tosuivi, .tobacklog { margin-left:auto; }
+  .msg { padding:30px; color:var(--muted); }
+  .warn { margin:8px 12px 0; padding:6px 10px; background:#fff4d6; border:1px solid #f0d58a; border-radius:4px; font-size:12px; }
+  #panel { display:none; position:fixed; top:0; right:0; bottom:0; width:290px; background:#fff; border-left:1px solid #ccc; box-shadow:-4px 0 12px rgba(0,0,0,.15); z-index:20; overflow-y:auto; padding:12px; }
+  #panel h3 { margin:14px 0 6px; font-size:13px; }
+  #panel .row { display:flex; align-items:center; gap:8px; margin:4px 0; }
+  #panel input[type=color] { width:34px; height:24px; padding:0; border:1px solid #ccc; border-radius:3px; background:none; cursor:pointer; }
+  #panel input[type=number] { width:54px; }
+  #panel .close { float:right; border:0; background:none; font-size:18px; cursor:pointer; }
+  #pop { display:none; position:fixed; top:80px; left:50%; transform:translateX(-50%); width:310px; background:#fff; border:1px solid #bbb; border-radius:6px; box-shadow:0 6px 24px rgba(0,0,0,.3); z-index:30; padding:12px; }
+  #pop .row { display:flex; gap:6px; margin:8px 0; }
+  #pop select, #pop input { font:inherit; padding:5px 6px; border:1px solid #ccc; border-radius:4px; flex:1; min-width:0; }
+  #pop button { font:inherit; padding:5px 10px; border:1px solid #ccc; border-radius:4px; background:#fff; cursor:pointer; }
+  #pop button.primary { background:var(--accent); color:#fff; border-color:var(--accent); }
+  #pop .hint { font-size:11px; color:var(--muted); }
+</style>
+</head>
+<body>
+<header id="hdr"></header>
+<div id="warn"></div>
+<div id="board"><div class="msg">Chargement… Associez les colonnes dans le panneau de configuration du widget.</div></div>
+<div id="panel"></div>
+<div id="pop"></div>
+
+<script>
+/* ============ CONFIGURATION ============ */
+// Les espaces = les tables Grist. La PREMIÈRE est l'espace "Projet" (tâches partagées, filtrées par responsable dans "Mes tâches").
+// Les identifiants de table (table) doivent correspondre exactement à ceux de Grist (Données brutes).
+// Toutes les tables doivent avoir les mêmes identifiants de colonnes que celle où le widget est installé.
+const SPACES = [
+  {table:'Taches',         label:'Projet', color:'#3a55d8', assigned:true},
+  {table:'Taches_perso',   label:'Perso',  color:'#17b3a3'},
+  {table:'Taches_privees', label:'Privé',  color:'#8a4fd8'},
+];
+const POLL_MS = 8000;           // rafraîchissement des autres tables
+
+const STATUTS = ['A faire','En cours','Bloqué','A valider','Terminé','Abandonné','Archivé'];
+const PRIOS   = ['P0 Critique','P1 Important','P2 Souhaitable','P3 Appréciable','Nouveau','Abandonné','Déjà prévu'];
+const STATUT_TERMINE = ['Terminé','Archivé'];   // dates affichées en vert
+const STATUT_COLORS = ['#1e9ac8','#9bbf5a','#e5484d','#f5a623','#17b3a3','#8a8f98','#555b66'];
+const PRIO_COLORS   = ['#e5484d','#f5a623','#1e9ac8','#6b8fb8','#9bbf5a','#8a8f98','#555b66'];
+const PALETTE = [['#fdf1c4','#6b5a10'],['#fcd9d9','#8a2b2b'],['#d6eef7','#1f5f78'],['#dcebd9','#355a2f'],
+                 ['#e8dcf5','#59397a'],['#ffe2c9','#8a4a12'],['#d9ecec','#245f5f'],['#ffd9e8','#8a2b55']];
+const PRIO_TAG = [[/^P0/,['#fcd9d9','#b3202f']],[/^P1/,['#fff0c2','#8a5a00']],[/^P2/,['#d6eef7','#1f5f78']],[/^P3/,['#dde6f2','#3b5a80']]];
+const TAG_CATS = [['etiquettes','Étiquette'],['themes','Thème'],['produit','Produit'],['sources','Source']];
+
+const COLS = [
+  {name:'titre',        title:'Titre de la tâche',                    type:'Text'},
+  {name:'groupe',       title:'Colonne du Kanban (Statut ou Prio)',   type:'Choice'},
+  {name:'statut',       title:'Statut (backlog/suivi et dates)',      type:'Choice', optional:true},
+  {name:'prio',         title:'Priorité',                             type:'Choice', optional:true},
+  {name:'charge',       title:'Charge (XS…XL)',                       type:'Choice', optional:true},
+  {name:'produit',      title:'Produit',                              type:'Choice,ChoiceList', optional:true},
+  {name:'themes',       title:'Thèmes',                               type:'Choice,ChoiceList', optional:true},
+  {name:'sources',      title:'Sources',                              type:'Choice,ChoiceList', optional:true},
+  {name:'etiquettes',   title:'Étiquettes libres (Liste de choix)',   type:'ChoiceList', optional:true},
+  {name:'personnes',    title:'Responsables (colonne texte/formule)', type:'Text,ChoiceList', optional:true},
+  {name:'echeance',     title:"Date d'échéance",                      type:'Date,DateTime', optional:true},
+  {name:'checklist',    title:'Checklist (texte "- [ ] / - [x]")',    type:'Text', optional:true},
+  {name:'pj',           title:'Pièces jointes',                       type:'Attachments', optional:true},
+  {name:'commentaires', title:'Nb de commentaires',                   type:'Int,Numeric', optional:true},
+  {name:'votes',        title:'Votes',                                type:'Int,Numeric', optional:true},
+];
+
+/* ============ ÉTAT ============ */
+let mode = 'suivi';            // suivi | backlog | perso
+let moi = '';                  // nom de la personne pour le mode "perso"
+let map = null;
+let host = null;               // identifiant de la table où le widget est installé
+let hostRecs = [];             // enregistrements de la table hôte (onRecords)
+let otherRecs = {};            // tableId -> enregistrements des autres tables
+let errors = {};               // tableId -> message d'erreur (pas d'accès, table absente…)
+let records = [];              // tous les enregistrements fusionnés
+let index = new Map();         // clé "table|id" -> enregistrement
+let colors = {groups:{}, tags:{}};
+let thr = {orange:3, red:1};
+let panelOpen = false;
+const F = {espace:'',prio:'',charge:'',theme:'',personne:'',produit:'',source:'',etiquette:'',from:'',to:'',q:''};
+
+/* ============ OUTILS ============ */
+const esc = s => String(s ?? '').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+function toList(v){
+  if (v == null || v === '') return [];
+  if (Array.isArray(v)) return (v[0]==='L' ? v.slice(1) : v).map(String).filter(Boolean);
+  return String(v).split(',').map(s=>s.trim()).filter(Boolean);
+}
+function hash(s){ let h=0; for (const c of String(s)) h=(h*31+c.charCodeAt(0))|0; return Math.abs(h); }
+function rgb(hex){ const n=parseInt(hex.slice(1),16); return [n>>16&255,n>>8&255,n&255]; }
+function toHex(a){ return '#'+a.map(v=>Math.round(v).toString(16).padStart(2,'0')).join(''); }
+function lighten(hex,p){ return toHex(rgb(hex).map(v=>v*(1-p)+255*p)); }
+function darken(hex,p){ return toHex(rgb(hex).map(v=>v*(1-p))); }
+function spaceOf(table){ return SPACES.find(s=>s.table===table) || {table, label:table, color:'#777'}; }
+function defaultTagColors(label,kind){
+  if (kind==='espace'){ const sp = SPACES.find(s=>s.label===label); if (sp) return [lighten(sp.color,.8), darken(sp.color,.35)]; }
+  if (kind==='prio') for (const [re,col] of PRIO_TAG) if (re.test(label)) return col;
+  return PALETTE[hash(label)%PALETTE.length];
+}
+function tag(label, kind){
+  let c = null;
+  if (colors.tags[label]) c = [lighten(colors.tags[label],.8), darken(colors.tags[label],.45)];
+  if (!c) c = defaultTagColors(label,kind);
+  return `<span class="tag${kind==='espace'?' space':''}" style="background:${c[0]};color:${c[1]}">${esc(label)}</span>`;
+}
+function tagX(label, key){
+  return tag(label).replace(/<\/span>$/, `<span class="x" data-rm="${key}" data-val="${esc(label)}" title="Retirer ce tag">×</span></span>`);
+}
+function toDate(v){
+  if (v == null || v === '') return null;
+  if (typeof v === 'number') return new Date(v*1000);
+  const d = new Date(v); return isNaN(d) ? null : d;
+}
+function dayStart(d){ const x=new Date(d); x.setHours(0,0,0,0); return x; }
+function fmtDate(d){ return d.toLocaleDateString('fr-FR',{day:'numeric',month:'short'}); }
+function initials(n){ return n.split(/\s+/).filter(Boolean).map(w=>w[0]).join('').slice(0,2).toUpperCase(); }
+function checklistCount(t){
+  let done=0,total=0;
+  for (const l of String(t||'').split('\n')){
+    const m = l.match(/^\s*[-*]\s*\[( |x|X)\]/);
+    if (m){ total++; if (m[1].toLowerCase()==='x') done++; }
+  }
+  return {done,total};
+}
+function g(r,k){ return map && map[k] ? r[k] : undefined; }
+function available(table){ return table===host || (!errors[table] && otherRecs[table]); }
+
+/* ============ CHARGEMENT DES TABLES ============ */
+function rowsFrom(t, table){
+  const n = (t.id||[]).length, out = [];
+  for (let i=0;i<n;i++){
+    const r = {id:t.id[i], _table:table, _key:table+'|'+t.id[i]};
+    for (const k in map) r[k] = (map[k] && t[map[k]]) ? t[map[k]][i] : undefined;
+    out.push(r);
+  }
+  return out;
+}
+async function loadOthers(){
+  if (!map || !host) return;
+  for (const sp of SPACES){
+    if (sp.table===host) continue;
+    try { otherRecs[sp.table] = rowsFrom(await grist.docApi.fetchTable(sp.table), sp.table); delete errors[sp.table]; }
+    catch(e){ errors[sp.table] = (e && e.message) || String(e); otherRecs[sp.table] = []; }
+  }
+  rebuild(); render();
+}
+function rebuild(){
+  records = [...hostRecs, ...SPACES.filter(s=>s.table!==host).flatMap(s=>otherRecs[s.table]||[])];
+  index = new Map(records.map(r=>[r._key,r]));
+}
+async function act(actions){
+  try { await grist.docApi.applyUserActions(actions); }
+  catch(e){ alert('Action refusée ou impossible : ' + ((e && e.message) || e)); }
+  await loadOthers();
+}
+
+/* ============ FILTRAGE ============ */
+function groupList(){
+  const base = mode==='backlog' ? PRIOS : STATUTS;
+  const defaults = mode==='backlog' ? PRIO_COLORS : STATUT_COLORS;
+  const seen = new Set(base);
+  const extra = [...new Set(records.map(r=>r.groupe).filter(v=>v && !seen.has(v)))];
+  return [...base,...extra].map((n,i)=>({name:n,color:colors.groups[n]||defaults[i]||'#999'}));
+}
+function passes(r){
+  const l = k => toList(g(r,k));
+  const sp = spaceOf(r._table);
+  if (F.espace && sp.label !== F.espace) return false;
+  // Règle Backlog / Suivi : un Statut renseigné = Suivi ; pas de Statut = Backlog
+  if (map.statut){
+    const hasStatut = !!g(r,'statut');
+    if (mode==='backlog' && hasStatut) return false;
+    if (mode!=='backlog' && !hasStatut) return false;
+  }
+  // Mode "Mes tâches" : tâches Projet = celles dont je suis responsable ; Perso / Privé = toutes
+  if (mode==='perso'){
+    if (sp.assigned && moi && !l('personnes').includes(moi)) return false;
+  } else if (F.personne && !l('personnes').includes(F.personne)) return false;
+  if (F.prio && g(r,'prio') !== F.prio) return false;
+  if (F.charge && g(r,'charge') !== F.charge) return false;
+  if (F.theme && !l('themes').includes(F.theme)) return false;
+  if (F.produit && !l('produit').includes(F.produit)) return false;
+  if (F.source && !l('sources').includes(F.source)) return false;
+  if (F.etiquette && !l('etiquettes').includes(F.etiquette)) return false;
+  if (mode!=='backlog' && (F.from||F.to)){
+    const d = toDate(g(r,'echeance')); if (!d) return false;
+    if (F.from && dayStart(d) < dayStart(F.from)) return false;
+    if (F.to && dayStart(d) > dayStart(F.to)) return false;
+  }
+  if (F.q){
+    const hay = [r.titre,...l('themes'),...l('sources'),...l('produit'),...l('etiquettes'),...l('personnes'),g(r,'checklist')].join(' ').toLowerCase();
+    if (!hay.includes(F.q.toLowerCase())) return false;
+  }
+  return true;
+}
+function uniq(key){ return [...new Set(records.flatMap(r=>toList(g(r,key))))].sort((a,b)=>a.localeCompare(b,'fr')); }
+
+/* ============ RENDU ============ */
+function renderHeader(){
+  const opt = (arr,val) => `<option value="">— tous —</option>` + arr.map(v=>`<option ${v===val?'selected':''}>${esc(v)}</option>`).join('');
+  const sel = (id,label,arr,val) => map ? `<label>${label}<select id="${id}">${opt(arr,val)}</select></label>` : '';
+  const has = k => map && map[k];
+  const spaces = SPACES.filter(s=>available(s.table)).map(s=>s.label);
+  let h = `<label>Mode <select id="mode">
+      <option value="suivi" ${mode==='suivi'?'selected':''}>Suivi de projet</option>
+      <option value="backlog" ${mode==='backlog'?'selected':''}>Backlog</option>
+      <option value="perso" ${mode==='perso'?'selected':''}>Mes tâches</option></select></label>`;
+  h += sel('f-espace','Espace',spaces,F.espace);
+  if (mode!=='backlog' && has('prio')) h += sel('f-prio','Prio',[...new Set(records.map(r=>g(r,'prio')).filter(Boolean))],F.prio);
+  if (has('charge')) h += sel('f-charge','Charge',[...new Set(records.map(r=>g(r,'charge')).filter(Boolean))],F.charge);
+  if (has('themes')) h += sel('f-theme','Thème',uniq('themes'),F.theme);
+  if (has('personnes')) h += sel('f-personne','Personne',uniq('personnes'),mode==='perso'?moi:F.personne);
+  if (has('produit')) h += sel('f-produit','Produit',uniq('produit'),F.produit);
+  if (has('sources')) h += sel('f-source','Source',uniq('sources'),F.source);
+  if (has('etiquettes')) h += sel('f-etiquette','Étiquette',uniq('etiquettes'),F.etiquette);
+  if (mode!=='backlog' && has('echeance')) h += `<label>Du <input type="date" id="f-from" value="${F.from}"></label><label>au <input type="date" id="f-to" value="${F.to}"></label>`;
+  h += `<input type="search" id="f-q" placeholder="Mot clé…" value="${esc(F.q)}">`;
+  h += `<button id="reset">Réinitialiser</button><span class="spacer"></span><button id="colorsBtn">🎨 Couleurs</button>`;
+  document.getElementById('hdr').innerHTML = h;
+
+  const bind = (id,key,cb) => { const e=document.getElementById(id); if(e) e.onchange = ()=>{F[key]=e.value; cb&&cb(e.value); render();}; };
+  bind('f-espace','espace'); bind('f-prio','prio'); bind('f-charge','charge'); bind('f-theme','theme');
+  const fp = document.getElementById('f-personne');
+  if (fp) fp.onchange = ()=>{ if(mode==='perso'){ moi=fp.value; grist.setOption('moi',moi); } else F.personne=fp.value; render(); };
+  bind('f-produit','produit'); bind('f-source','source'); bind('f-etiquette','etiquette'); bind('f-from','from'); bind('f-to','to');
+  const q=document.getElementById('f-q'); if(q) q.oninput = ()=>{F.q=q.value; renderBoard();};
+  document.getElementById('mode').onchange = e=>{ mode=e.target.value; grist.setOption('mode',mode); render(); };
+  document.getElementById('colorsBtn').onclick = ()=>{ panelOpen=!panelOpen; renderPanel(); };
+  document.getElementById('reset').onclick = ()=>{ Object.keys(F).forEach(k=>F[k]=''); render(); };
+}
+function renderWarn(){
+  const w = document.getElementById('warn');
+  const parts = [];
+  if (host && !SPACES.some(s=>s.table===host))
+    parts.push(`Ce widget est sur la table « ${esc(host)} » qui n'est pas dans la liste SPACES du code (${SPACES.map(s=>esc(s.table)).join(', ')}).`);
+  for (const t in errors) parts.push(`Espace « ${esc(spaceOf(t).label)} » indisponible (table « ${esc(t)} » introuvable ou accès refusé).`);
+  w.innerHTML = parts.map(p=>`<div class="warn">${p}</div>`).join('');
+}
+
+function dateBadge(r){
+  const d = toDate(g(r,'echeance')); if(!d) return '';
+  const statut = g(r,'statut') || (mode!=='backlog' ? r.groupe : '');
+  let cls = 'd-grey';
+  if (STATUT_TERMINE.includes(statut)) cls = 'd-ok';
+  else {
+    const diff = Math.round((dayStart(d)-dayStart(new Date()))/86400000);
+    if (diff <= thr.red) cls = 'd-red'; else if (diff <= thr.orange) cls = 'd-orange';
+  }
+  return `<span class="date ${cls}">${fmtDate(d)}${cls==='d-ok'?' ✔':''}</span>`;
+}
+function cardHtml(r){
+  const l = k => toList(g(r,k));
+  const sp = spaceOf(r._table);
+  let tags = '';
+  if (!F.espace) tags += tag(sp.label,'espace');
+  if (mode!=='backlog' && g(r,'prio')) tags += tag(g(r,'prio'),'prio');
+  if (g(r,'charge')) tags += tag(g(r,'charge'));
+  l('etiquettes').forEach(t=>tags+=tagX(t,'etiquettes'));
+  l('produit').forEach(t=>tags+=tagX(t,'produit'));
+  l('themes').forEach(t=>tags+=tagX(t,'themes'));
+  l('sources').forEach(t=>tags+=tagX(t,'sources'));
+  tags += `<span class="addtag" data-addtag="1" title="Ajouter un tag (existant ou nouveau)">+ tag</span>`;
+  let meta = dateBadge(r);
+  const cl = checklistCount(g(r,'checklist'));
+  if (cl.total) meta += `<span>☑ ${cl.done}/${cl.total}</span>`;
+  const pj = toList(g(r,'pj')).length; if (pj) meta += `<span>📎${pj}</span>`;
+  if (mode!=='backlog' && map.commentaires && g(r,'commentaires')) meta += `<span>🗨️${g(r,'commentaires')}</span>`;
+  if (mode==='backlog' && map.votes) meta += `<button class="vote" data-vote="1">👍 ${g(r,'votes')||0}</button>`;
+  if (SPACES.filter(s=>available(s.table)).length>1) meta += `<button class="move" data-move="1" title="Déplacer vers un autre espace">⇄</button>`;
+  if (mode==='backlog' && map.statut) meta += `<button class="tosuivi" data-tosuivi="1" title="Passer dans le suivi (statut A faire)">➜ Suivi</button>`;
+  if (mode!=='backlog' && map.statut && g(r,'statut')==='A faire') meta += `<button class="tobacklog" data-tobacklog="1" title="Remettre dans le backlog (statut vidé)">⬅ Backlog</button>`;
+  const av = l('personnes').map(n=>`<div class="av" title="${esc(n)}">${esc(initials(n))}</div>`).join('');
+  return `<div class="card" draggable="true" data-key="${esc(r._key)}">
+    <div class="tags">${tags}</div>
+    <div class="title">${esc(r.titre)||'<i>(sans titre)</i>'}</div>
+    <div class="meta">${meta}<div class="avatars">${av}</div></div></div>`;
+}
+function renderBoard(){
+  const board = document.getElementById('board');
+  if (!map){ board.innerHTML = '<div class="msg">Associez au minimum les colonnes <b>Titre</b> et <b>Colonne du Kanban</b> dans la configuration du widget.</div>'; return; }
+  const shown = records.filter(passes);
+  board.innerHTML = groupList().map(gr=>{
+    const cards = shown.filter(r=>(r.groupe||'')===gr.name).sort((a,b)=>{
+      const da=toDate(g(a,'echeance')), db=toDate(g(b,'echeance'));
+      return (da?+da:9e15)-(db?+db:9e15);
+    });
+    return `<div class="col" data-group="${esc(gr.name)}">
+      <h2><span class="dot" style="background:${gr.color}"></span>${esc(gr.name)}<span class="count">${cards.length}</span></h2>
+      ${cards.map(cardHtml).join('')}
+      <button class="add" data-add="${esc(gr.name)}">+ Nouvelle carte</button></div>`;
+  }).join('');
+  wire();
+}
+function render(){ renderHeader(); renderWarn(); renderBoard(); renderPanel(); }
+
+/* ---- Panneau de personnalisation des couleurs ---- */
+function saveColors(){ grist.setOption('colors', colors); }
+function renderPanel(){
+  const p = document.getElementById('panel');
+  if (!panelOpen || !map){ p.style.display='none'; return; }
+  p.style.display = 'block';
+  const groups = groupList();
+  const tagVals = [...new Set([
+    ...records.map(r=>g(r,'prio')), ...records.map(r=>g(r,'charge')),
+    ...['etiquettes','produit','themes','sources'].flatMap(k=>records.flatMap(r=>toList(g(r,k))))
+  ].filter(Boolean))].sort((a,b)=>a.localeCompare(b,'fr'));
+  const spaceRows = SPACES.map(s=>`<div class="row"><input type="color" data-tag="${esc(s.label)}" value="${colors.tags[s.label]||s.color}"> ${tag(s.label,'espace')}</div>`).join('');
+  p.innerHTML = `<button class="close" id="pclose">×</button><b>Personnalisation</b>
+    <h3>Espaces</h3>${spaceRows}
+    <h3>Colonnes du Kanban</h3>
+    ${groups.map(gr=>`<div class="row"><input type="color" data-grp="${esc(gr.name)}" value="${gr.color.length===7?gr.color:'#999999'}"> ${esc(gr.name)}</div>`).join('')}
+    <h3>Tags (couleur de base : le fond est éclairci automatiquement)</h3>
+    ${tagVals.map(v=>`<div class="row"><input type="color" data-tag="${esc(v)}" value="${colors.tags[v]||defaultTagColors(v,'')[1]}"> ${tag(v)}</div>`).join('')}
+    <h3>Alertes d'échéance</h3>
+    <div class="row">Orange à <input type="number" id="t-orange" min="0" value="${thr.orange}"> jour(s) ou moins</div>
+    <div class="row">Rouge à <input type="number" id="t-red" min="0" value="${thr.red}"> jour(s) ou moins</div>
+    <div class="row"><button id="creset">Rétablir les couleurs par défaut</button></div>`;
+  document.getElementById('pclose').onclick = ()=>{ panelOpen=false; renderPanel(); };
+  p.querySelectorAll('[data-grp]').forEach(i=>{
+    i.oninput = ()=>{ colors.groups[i.dataset.grp]=i.value; renderBoard(); };
+    i.onchange = ()=>{ saveColors(); };
+  });
+  p.querySelectorAll('[data-tag]').forEach(i=>{
+    i.oninput = ()=>{ colors.tags[i.dataset.tag]=i.value; renderBoard(); };
+    i.onchange = ()=>{ saveColors(); renderPanel(); };
+  });
+  document.getElementById('t-orange').onchange = e=>{ thr.orange=+e.target.value; grist.setOption('orange',thr.orange); renderBoard(); };
+  document.getElementById('t-red').onchange = e=>{ thr.red=+e.target.value; grist.setOption('red',thr.red); renderBoard(); };
+  document.getElementById('creset').onclick = ()=>{ colors={groups:{},tags:{}}; saveColors(); render(); };
+}
+
+/* ============ TAGS : ajout / retrait depuis la carte ============ */
+function isListCol(key){
+  const vals = records.map(r=>g(r,key)).filter(v=>v!=null && v!=='');
+  return vals.length===0 || vals.some(v=>Array.isArray(v));
+}
+function writeTags(card, key, list){
+  const val = isListCol(key) ? ['L',...list] : (list[0] ?? null);
+  return act([['UpdateRecord', card._table, card.id, {[map[key]]: val}]]);
+}
+function addTag(card, key, value){
+  value = String(value||'').trim(); if (!value) return;
+  const cur = toList(g(card,key));
+  if (cur.includes(value)) return;
+  return writeTags(card, key, isListCol(key) ? [...cur,value] : [value]);
+}
+function removeTag(card, key, value){
+  return writeTags(card, key, toList(g(card,key)).filter(v=>v!==value));
+}
+function closePop(){ document.getElementById('pop').style.display='none'; }
+function openPop(html){ const p=document.getElementById('pop'); p.innerHTML=html; p.style.display='block'; return p; }
+function openTagPop(card){
+  const cats = TAG_CATS.filter(([k])=>map[k]);
+  openPop(`<b>Ajouter un tag</b>
+    <div class="row"><select id="pc">${cats.map(([k,n])=>`<option value="${k}">${n}</option>`).join('')}</select></div>
+    <div class="row"><input id="pv" list="pl" placeholder="Choisir ou taper un nouveau tag…" autocomplete="off"><datalist id="pl"></datalist></div>
+    <div class="hint">Un nom qui n'existe pas encore est créé automatiquement.</div>
+    <div class="row" style="justify-content:flex-end"><button id="pcancel">Annuler</button><button class="primary" id="pok">Ajouter</button></div>`);
+  const fill = ()=>{ document.getElementById('pl').innerHTML = uniq(document.getElementById('pc').value).map(v=>`<option value="${esc(v)}">`).join(''); };
+  document.getElementById('pc').onchange = fill; fill();
+  const ok = ()=>{ const v=document.getElementById('pv').value; const k=document.getElementById('pc').value; closePop(); addTag(card,k,v); };
+  document.getElementById('pok').onclick = ok;
+  document.getElementById('pcancel').onclick = closePop;
+  document.getElementById('pv').onkeydown = e=>{ if(e.key==='Enter') ok(); if(e.key==='Escape') closePop(); };
+  document.getElementById('pv').focus();
+}
+
+/* ============ NOUVELLE CARTE ============ */
+function openNewPop(group){
+  const sps = SPACES.filter(s=>available(s.table));
+  const def = (SPACES.find(s=>s.label===F.espace) || sps[0] || {}).table;
+  openPop(`<b>Nouvelle carte</b> <span class="hint">(${esc(group)})</span>
+    <div class="row"><select id="ns">${sps.map(s=>`<option value="${esc(s.table)}" ${s.table===def?'selected':''}>${esc(s.label)}</option>`).join('')}</select></div>
+    <div class="row"><input id="nt" placeholder="Titre de la tâche…" autocomplete="off"></div>
+    <div class="row" style="justify-content:flex-end"><button id="ncancel">Annuler</button><button class="primary" id="nok">Créer</button></div>`);
+  const ok = ()=>{
+    const t = document.getElementById('nt').value.trim(); const table = document.getElementById('ns').value;
+    if (!t) return; closePop();
+    act([['AddRecord', table, null, {[map.titre]: t, [map.groupe]: group}]]);
+  };
+  document.getElementById('nok').onclick = ok;
+  document.getElementById('ncancel').onclick = closePop;
+  document.getElementById('nt').onkeydown = e=>{ if(e.key==='Enter') ok(); if(e.key==='Escape') closePop(); };
+  document.getElementById('nt').focus();
+}
+
+/* ============ DÉPLACER UNE CARTE VERS UN AUTRE ESPACE ============ */
+async function dataColumns(tableId){
+  const T = await grist.docApi.fetchTable('_grist_Tables');
+  const C = await grist.docApi.fetchTable('_grist_Tables_column');
+  const ti = T.id[T.tableId.indexOf(tableId)];
+  const cols = [];
+  C.id.forEach((_,i)=>{
+    if (C.parentId[i]===ti && !C.isFormula[i] && !/^(gristHelper_|manualSort)/.test(C.colId[i])) cols.push(C.colId[i]);
+  });
+  return cols;
+}
+async function moveCard(card, toTable){
+  try {
+    const src = await grist.docApi.fetchTable(card._table);
+    const row = src.id.indexOf(card.id);
+    if (row < 0) throw new Error('Carte introuvable dans la table source.');
+    const dstCols = new Set(await dataColumns(toTable));
+    const srcCols = new Set(await dataColumns(card._table));
+    const fields = {};
+    for (const c of dstCols){
+      if (!srcCols.has(c) || !(c in src)) continue;
+      const v = src[c][row];
+      if (v==null || v==='' || v===0 || (Array.isArray(v) && v.length<=1)) continue;   // laisse jouer les valeurs par défaut
+      fields[c] = v;
+    }
+    await grist.docApi.applyUserActions([['AddRecord', toTable, null, fields]]);   // 1) copie
+    await grist.docApi.applyUserActions([['RemoveRecord', card._table, card.id]]); // 2) suppression de l'original
+  } catch(e){
+    alert('Déplacement impossible (la carte n\'a pas été supprimée de son espace d\'origine si la copie a échoué) : ' + ((e && e.message) || e));
+  }
+  await loadOthers();
+}
+function openMovePop(card){
+  const sps = SPACES.filter(s=>s.table!==card._table && available(s.table));
+  if (!sps.length) return;
+  openPop(`<b>Déplacer vers un autre espace</b>
+    <div class="row"><select id="mt">${sps.map(s=>`<option value="${esc(s.table)}">${esc(s.label)}</option>`).join('')}</select></div>
+    <div class="hint">La carte est copiée dans l'espace choisi puis supprimée de « ${esc(spaceOf(card._table).label)} ».</div>
+    <div class="row" style="justify-content:flex-end"><button id="mcancel">Annuler</button><button class="primary" id="mok">Déplacer</button></div>`);
+  document.getElementById('mcancel').onclick = closePop;
+  document.getElementById('mok').onclick = ()=>{ const t=document.getElementById('mt').value; closePop(); moveCard(card,t); };
+}
+
+/* ============ INTERACTIONS ============ */
+function cardOf(el){ const c = el.closest('.card'); return c ? index.get(c.dataset.key) : null; }
+function wire(){
+  let dragKey = null;
+  document.querySelectorAll('.card').forEach(c=>{
+    c.ondragstart = e=>{ dragKey=c.dataset.key; c.classList.add('dragging'); e.dataTransfer.setData('text/plain',dragKey); };
+    c.ondragend = ()=>c.classList.remove('dragging');
+    c.onclick = e=>{
+      if (e.target.closest('button,.addtag,.x')) return;
+      const r = index.get(c.dataset.key);
+      if (r && r._table===host) grist.setCursorPos({rowId:r.id}).catch(()=>{});
+    };
+  });
+  document.querySelectorAll('.col').forEach(col=>{
+    col.ondragover = e=>{ e.preventDefault(); col.classList.add('over'); };
+    col.ondragleave = ()=>col.classList.remove('over');
+    col.ondrop = e=>{
+      e.preventDefault(); col.classList.remove('over');
+      const r = index.get(e.dataTransfer.getData('text/plain') || dragKey); if(!r) return;
+      act([['UpdateRecord', r._table, r.id, {[map.groupe]: col.dataset.group}]]);
+    };
+  });
+  document.querySelectorAll('[data-add]').forEach(b=>b.onclick=()=>openNewPop(b.dataset.add));
+  document.querySelectorAll('[data-addtag]').forEach(b=>b.onclick=e=>{
+    e.stopPropagation();
+    if(!TAG_CATS.some(([k])=>map[k])){ alert("Associez au moins une colonne Étiquettes, Thèmes, Produit ou Sources dans la configuration du widget."); return; }
+    openTagPop(cardOf(b));
+  });
+  document.querySelectorAll('[data-rm]').forEach(x=>x.onclick=e=>{ e.stopPropagation(); removeTag(cardOf(x), x.dataset.rm, x.dataset.val); });
+  document.querySelectorAll('[data-vote]').forEach(b=>b.onclick=()=>{
+    const r = cardOf(b);
+    act([['UpdateRecord', r._table, r.id, {[map.votes]:(Number(g(r,'votes'))||0)+1}]]);
+  });
+  document.querySelectorAll('[data-move]').forEach(b=>b.onclick=()=>openMovePop(cardOf(b)));
+  document.querySelectorAll('[data-tosuivi]').forEach(b=>b.onclick=()=>{
+    const r = cardOf(b); act([['UpdateRecord', r._table, r.id, {[map.statut]:'A faire'}]]);
+  });
+  document.querySelectorAll('[data-tobacklog]').forEach(b=>b.onclick=()=>{
+    const r = cardOf(b); act([['UpdateRecord', r._table, r.id, {[map.statut]:null}]]);
+  });
+}
+
+/* ============ GRIST ============ */
+grist.ready({ columns: COLS, requiredAccess: 'full', allowSelectBy: true });
+grist.onOptions(o=>{
+  if (o && o.mode) mode = o.mode;
+  if (o && o.moi !== undefined) moi = o.moi;
+  if (o && o.colors) colors = {groups:o.colors.groups||{}, tags:o.colors.tags||{}};
+  if (o && o.orange != null) thr.orange = Number(o.orange);
+  if (o && o.red != null) thr.red = Number(o.red);
+  render();
+});
+grist.onRecords(async (recs, mappings)=>{
+  map = mappings;
+  if (!host){ try { host = await grist.selectedTable.getTableId(); } catch(e){ host = null; } }
+  hostRecs = (recs||[]).map(r=>({...r, _table:host, _key:host+'|'+r.id}));
+  rebuild(); render();
+  loadOthers();
+});
+setInterval(()=>{ if (!document.hidden) loadOthers(); }, POLL_MS);
+</script>
+</body>
+</html>
