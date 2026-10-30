@@ -46,6 +46,8 @@
   .tosuivi, .tobacklog { margin-left:auto; }
   .msg { padding:30px; color:var(--muted); }
   .info { margin:8px 12px 0; padding:5px 10px; background:#eef2ff; border:1px solid #cdd6f7; border-radius:4px; font-size:12px; color:#2b3a7a; }
+  #diag { margin:8px 12px 0; padding:8px 10px; background:#fff; border:1px solid #bbb; border-radius:4px; font:11px/1.4 Consolas,monospace; white-space:pre-wrap; word-break:break-all; user-select:all; max-height:260px; overflow:auto; }
+  .err { margin:8px 12px 0; padding:6px 10px; background:#ffd9dc; border:1px solid #e59aa1; border-radius:4px; font-size:12px; }
   .warn { margin:8px 12px 0; padding:6px 10px; background:#fff4d6; border:1px solid #f0d58a; border-radius:4px; font-size:12px; }
 
   /* panneaux latéraux : couleurs et fiche de carte */
@@ -86,6 +88,8 @@
 <body>
 <header id="hdr"></header>
 <div id="warn"></div>
+<div id="err"></div>
+<div id="diag" style="display:none"></div>
 <div id="board"><div class="msg">Chargement… Associez les colonnes dans le panneau de configuration du widget.</div></div>
 <div id="panel"></div>
 <div id="fiche"></div>
@@ -93,6 +97,7 @@
 
 <script>
 /* ============ CONFIGURATION ============ */
+const VERSION = '2026-10-30 c';   // affichée dans le bandeau bleu : permet de vérifier que le bon fichier est chargé
 const STATUTS = ['A faire','En cours','Bloqué','A valider','Terminé','Abandonné','Archivé'];
 const PRIOS   = ['P0 Critique','P1 Important','P2 Souhaitable','P3 Appréciable','Nouveau','Abandonné','Déjà prévu'];
 const CHARGES = ['XS','S','M','L','XL'];
@@ -135,6 +140,8 @@ let thr = {orange:3, red:1};
 let panelOpen = false;
 let openId = null;             // carte ouverte dans la fiche
 let ficheSig = '';             // signature de la carte affichée (évite de reconstruire la fiche inutilement)
+let nCalls = 0, lastCall = '';   // diagnostic : nombre d'appels onRecords
+let diagOpen = false, tableCount = null;
 let focusAfter = null;         // champ à refocaliser après reconstruction de la fiche
 const F = {prio:'',charge:'',theme:'',personne:'',produit:'',source:'',etiquette:'',from:'',to:'',q:''};
 
@@ -263,7 +270,7 @@ function renderHeader(){
   if (has('etiquettes')) h += sel('f-etiquette','Étiquette',uniq('etiquettes'),F.etiquette);
   if (mode!=='backlog' && has('echeance')) h += `<label>Du <input type="date" id="f-from" value="${F.from}"></label><label>au <input type="date" id="f-to" value="${F.to}"></label>`;
   h += `<input type="search" id="f-q" placeholder="Mot clé…" value="${esc(F.q)}">`;
-  h += `<button id="reset">Réinitialiser</button><span class="spacer"></span><button id="colorsBtn">🎨 Couleurs</button>`;
+  h += `<button id="reset">Réinitialiser</button><span class="spacer"></span><button id="diagBtn">🔧 Diagnostic</button><button id="colorsBtn">🎨 Couleurs</button>`;
   document.getElementById('hdr').innerHTML = h;
 
   const bind = (id,key) => { const e=document.getElementById(id); if(e) e.onchange = ()=>{F[key]=e.value; render();}; };
@@ -273,6 +280,7 @@ function renderHeader(){
   if (fp) fp.onchange = ()=>{ if(mode==='perso'){ moi=fp.value; grist.setOption('moi',moi); } else F.personne=fp.value; render(); };
   const q=document.getElementById('f-q'); if(q) q.oninput = ()=>{F.q=q.value; renderBoard();};
   document.getElementById('mode').onchange = e=>{ mode=e.target.value; grist.setOption('mode',mode); render(); };
+  document.getElementById('diagBtn').onclick = ()=>{ diagOpen=!diagOpen; if(diagOpen) loadTableCount(); renderDiag(); };
   document.getElementById('colorsBtn').onclick = ()=>{ panelOpen=!panelOpen; if(panelOpen) closeFiche(); renderPanel(); };
   document.getElementById('reset').onclick = ()=>{ Object.keys(F).forEach(k=>F[k]=''); render(); };
 }
@@ -288,7 +296,7 @@ function renderWarn(){
     if (inv>shown) t += ` · ${inv-shown} masquée(s) par les filtres`;
     t += `. Colonne du Kanban → <b>${esc(map.groupe||'?')}</b> · Statut → <b>${esc(map.statut||'non associé')}</b>.`;
     if (!total) t += ` <b>Grist n'envoie aucune ligne</b> : vérifiez qu'aucun filtre n'est actif sur le widget (bouton « Enregistrer » / ↺ en haut à droite de la section).`;
-    parts.push(`<div class="info">${t}</div>`);
+    parts.push(`<div class="info">${t} <span style="opacity:.6">(widget v${VERSION})</span></div>`);
   }
   w.innerHTML = parts.join('');
 }
@@ -344,7 +352,41 @@ function renderBoard(){
   }).join('');
   wire();
 }
-function render(){ rebuild(); renderHeader(); renderWarn(); renderBoard(); renderPanel(); renderFiche(); }
+function showError(e){
+  const el = document.getElementById('err'); if (!el) return;
+  const msg = (e && (e.stack || e.message)) || String(e);
+  el.innerHTML = `<div class="err"><b>Erreur dans le widget</b> (copiez ce texte et envoyez-le) :<br><code>${esc(msg).slice(0,700)}</code></div>`;
+}
+function render(){
+  try { rebuild(); renderHeader(); renderWarn(); renderBoard(); renderPanel(); renderFiche(); renderDiag(); document.getElementById('err').innerHTML=''; }
+  catch(e){ showError(e); }
+}
+window.addEventListener('error', e=>showError(e.error||e.message));
+window.addEventListener('unhandledrejection', e=>showError(e.reason));
+
+/* ---- Diagnostic ---- */
+async function loadTableCount(){
+  try { const t = await grist.docApi.fetchTable(host); tableCount = (t.id||[]).length; } catch(e){ tableCount = 'erreur : '+((e&&e.message)||e); }
+  renderDiag();
+}
+function renderDiag(){
+  const d = document.getElementById('diag');
+  if (!diagOpen){ d.style.display='none'; return; }
+  d.style.display='block';
+  const first = records[0] ? JSON.stringify(records[0]) : '(aucune)';
+  const active = Object.entries(F).filter(([k,v])=>v).map(([k,v])=>k+'='+v).join(', ') || 'aucun';
+  d.textContent = [
+    'Version du widget : '+VERSION,
+    'Table du widget : '+host,
+    'Mode : '+mode+' | filtres du widget : '+active,
+    'onRecords appelé '+nCalls+' fois (dernier : '+(lastCall||'jamais')+')',
+    'Lignes reçues de Grist : '+records.length,
+    'Lignes dans la table (tous filtres ignorés) : '+tableCount,
+    'Association des colonnes : '+JSON.stringify(map),
+    'Cartes affichables dans cette vue : '+(map?records.filter(passes).length:'?'),
+    'Première ligne reçue : '+first.slice(0,700),
+  ].join('\n');
+}
 function rebuild(){ index = new Map(records.map(r=>[r.id,r])); }
 
 /* ---- Panneau de personnalisation des couleurs ---- */
@@ -559,6 +601,7 @@ grist.onOptions(o=>{
   render();
 });
 grist.onRecords(async (recs, mappings)=>{
+  nCalls++; lastCall = new Date().toLocaleTimeString('fr-FR')+' – '+((recs||[]).length)+' ligne(s)';
   map = mappings;
   if (!host){ try { host = await grist.selectedTable.getTableId(); } catch(e){ host = null; } }
   records = recs || [];
