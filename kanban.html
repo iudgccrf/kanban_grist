@@ -8,14 +8,23 @@
 <style>
   :root { --bg:#f4f5f7; --col:#eeeef0; --card:#fff; --txt:#161616; --muted:#666; --accent:#3a55d8; --accent-bg:#e3e8fb; }
   * { box-sizing:border-box; }
-  body { margin:0; font-family:"Marianne","Segoe UI",Arial,sans-serif; background:var(--bg); color:var(--txt); font-size:13px; }
-  header { position:sticky; top:0; z-index:5; background:#fff; border-bottom:1px solid #ddd; padding:8px 12px; display:flex; flex-wrap:wrap; gap:6px; align-items:center; }
+  html, body { height:100%; }
+  body { margin:0; font-family:"Marianne","Segoe UI",Arial,sans-serif; background:var(--bg); color:var(--txt); font-size:13px; display:flex; flex-direction:column; overflow:hidden; }
+  header { flex:none; background:#fff; border-bottom:1px solid #ddd; padding:6px 12px; display:flex; flex-wrap:wrap; gap:6px; align-items:center; }
   header select, header input { font:inherit; padding:4px 6px; border:1px solid #ccc; border-radius:4px; background:#fff; max-width:150px; }
-  header input[type=search] { width:150px; }
+  header input[type=search] { width:140px; }
   header label { color:var(--muted); font-size:12px; display:flex; align-items:center; gap:3px; }
-  header button { font:inherit; border:1px solid #ccc; background:#fff; border-radius:4px; padding:4px 8px; cursor:pointer; }
+  header button, .fb { font:inherit; border:1px solid #ccc; background:#fff; border-radius:4px; padding:4px 8px; cursor:pointer; }
+  .fb.active { background:var(--accent-bg); border-color:var(--accent); color:#2b3a9a; font-weight:700; }
   header .spacer { flex:1; }
-  #board { display:flex; gap:12px; padding:12px; align-items:flex-start; overflow-x:auto; min-height:calc(100vh - 60px); }
+  #bands { flex:none; }
+  /* le tableau occupe toute la hauteur : la barre de défilement horizontale reste toujours visible en bas */
+  #board { flex:1; min-height:0; display:flex; gap:12px; padding:12px 12px 4px; align-items:flex-start; overflow-x:scroll; overflow-y:auto; }
+  #board::-webkit-scrollbar { height:16px; width:12px; }
+  #board::-webkit-scrollbar-track { background:#e4e6ec; border-radius:8px; }
+  #board::-webkit-scrollbar-thumb { background:#9aa3c7; border-radius:8px; border:3px solid #e4e6ec; }
+  #board::-webkit-scrollbar-thumb:hover { background:var(--accent); }
+  #board { scrollbar-color:#9aa3c7 #e4e6ec; scrollbar-width:auto; }
   .col { flex:0 0 280px; background:var(--col); border-radius:6px; padding:8px; box-shadow:0 1px 2px rgba(0,0,0,.15); }
   .col.over { outline:2px dashed var(--accent); }
   .col.colover { outline:3px solid var(--accent); }
@@ -31,8 +40,8 @@
   .tag { font-size:11px; font-weight:700; padding:2px 6px; border-radius:3px; white-space:nowrap; }
   .tag .x { margin-left:3px; opacity:.45; cursor:pointer; }
   .tag .x:hover { opacity:1; }
-  .addtag { font-size:11px; padding:2px 7px; border:1px dashed #aab; border-radius:3px; color:#667; cursor:pointer; white-space:nowrap; }
-  .addtag:hover { background:#eef1ff; color:var(--accent); border-color:var(--accent); }
+  .cplus { font-size:11px; padding:2px 8px; border:1px dashed #aab; border-radius:3px; color:#667; cursor:pointer; white-space:nowrap; background:none; font-family:inherit; }
+  .cplus:hover { background:#eef1ff; color:var(--accent); border-color:var(--accent); }
   .title { font-size:14px; line-height:1.3; margin:2px 0 8px; }
   .meta { display:flex; flex-wrap:wrap; align-items:center; gap:7px; color:var(--muted); font-size:12px; }
   .date { font-weight:700; padding:1px 6px; border-radius:3px; }
@@ -48,7 +57,7 @@
   .tosuivi, .tobacklog { margin-left:auto; }
   .msg { padding:30px; color:var(--muted); }
   .info { margin:8px 12px 0; padding:5px 10px; background:#eef2ff; border:1px solid #cdd6f7; border-radius:4px; font-size:12px; color:#2b3a7a; }
-  #diag { margin:8px 12px 0; padding:8px 10px; background:#fff; border:1px solid #bbb; border-radius:4px; font:11px/1.4 Consolas,monospace; white-space:pre-wrap; word-break:break-all; user-select:all; max-height:260px; overflow:auto; }
+  #diag { margin:8px 12px 0; padding:8px 10px; background:#fff; border:1px solid #bbb; border-radius:4px; font:11px/1.4 Consolas,monospace; white-space:pre-wrap; word-break:break-all; user-select:all; max-height:220px; overflow:auto; }
   .err { margin:8px 12px 0; padding:6px 10px; background:#ffd9dc; border:1px solid #e59aa1; border-radius:4px; font-size:12px; }
   .warn { margin:8px 12px 0; padding:6px 10px; background:#fff4d6; border:1px solid #f0d58a; border-radius:4px; font-size:12px; }
 
@@ -62,37 +71,35 @@
   #panel .close { float:right; }
 
   /* fiche de la carte */
-  #fiche { display:none; position:fixed; top:0; right:0; bottom:0; width:min(540px,100vw); background:#fff; border-left:1px solid #ccc; box-shadow:-6px 0 18px rgba(0,0,0,.2); z-index:20; overflow-y:auto; }
-  #fiche .fhead { position:sticky; top:0; z-index:3; background:#fff; display:flex; align-items:center; gap:10px; padding:12px 18px; border-bottom:1px solid #eee; }
-  #fiche .fbody { padding:6px 22px 40px; }
-  #fiche .stsel { font:inherit; font-weight:700; color:#2b3a9a; background:var(--accent-bg); border:0; border-radius:6px; padding:8px 12px; cursor:pointer; }
-  #fiche .fsp { flex:1; }
-  #fiche .ftitle { width:100%; font:inherit; font-size:20px; font-weight:700; border:1px solid transparent; border-radius:6px; padding:8px 8px; margin:12px -8px 4px; background:transparent; }
+  #fiche { display:none; position:fixed; top:0; right:0; bottom:0; width:min(580px,100vw); background:#fff; border-left:1px solid #ccc; box-shadow:-6px 0 18px rgba(0,0,0,.2); z-index:20; overflow-y:auto; }
+  #fiche .fhead { position:sticky; top:0; z-index:3; background:#fff; display:flex; align-items:center; gap:10px; padding:10px 18px; border-bottom:1px solid #eee; }
+  #fiche .ftitle { flex:1; min-width:0; font:inherit; font-size:18px; font-weight:700; border:1px solid transparent; border-radius:6px; padding:6px 8px; background:transparent; }
   #fiche .ftitle:hover, #fiche .ftitle:focus { border-color:#ccc; background:#fff; }
-  #fiche .sec { margin:20px 0 0; }
+  #fiche .fbody { padding:10px 20px 40px; }
+  .tb { display:flex; flex-wrap:wrap; gap:6px; }
+  .dd { font:inherit; font-size:12px; font-weight:600; padding:6px 10px; border:1px solid #c9d0ea; border-radius:6px; background:#f4f6ff; color:#2b3a9a; cursor:pointer; white-space:nowrap; }
+  .dd:hover, .dd.on { background:var(--accent-bg); border-color:var(--accent); }
+  .dd.vote2 { background:#fff; border-color:#ccc; color:#333; margin-left:auto; }
+  .summ { display:flex; flex-wrap:wrap; gap:6px 22px; margin:12px 0 4px; }
+  .sg .lbl { font-size:11px; color:var(--muted); margin-bottom:3px; font-weight:600; }
+  .sg .vals { display:flex; flex-wrap:wrap; gap:4px; align-items:center; }
+  .sg .tag { font-size:12px; padding:3px 8px; border-radius:4px; }
+  .none { color:#999; font-size:12px; }
+  #fiche .sec { margin:18px 0 0; }
   #fiche .sh { display:flex; align-items:center; gap:8px; font-weight:700; font-size:14px; margin:0 0 8px; }
-  #fiche .sh .ic { width:18px; text-align:center; }
   #fiche .sh .sub { margin-left:auto; font-weight:400; font-size:12px; color:var(--muted); }
-  #fiche .lbl { font-size:12px; color:var(--muted); margin:0 0 4px; }
-  #fiche .pills { display:flex; flex-wrap:wrap; gap:6px; }
-  #fiche .pill { font:inherit; font-weight:600; padding:5px 12px; border:2px solid #d3d7e0; border-radius:6px; background:#fff; color:#555; cursor:pointer; }
-  #fiche .pill:hover { border-color:#9aa5d8; }
-  #fiche .grid2 { display:grid; grid-template-columns:1fr 1fr; gap:18px; }
-  @media (max-width:520px){ #fiche .grid2 { grid-template-columns:1fr; } }
-  #fiche select, #fiche input[type=text], #fiche input[type=date], #fiche textarea { font:inherit; padding:7px 9px; border:1px solid #ccc; border-radius:6px; background:#fff; min-width:0; max-width:100%; }
-  #fiche textarea { width:100%; min-height:110px; resize:vertical; line-height:1.45; }
   #fiche .row { display:flex; align-items:center; gap:8px; margin:6px 0; }
-  #fiche .grow { flex:1; }
-  #fiche .btn { font:inherit; border:1px solid var(--accent); background:var(--accent); color:#fff; border-radius:6px; padding:7px 13px; cursor:pointer; }
-  #fiche .btn.soft { background:var(--accent-bg); color:#2b3a9a; border-color:var(--accent-bg); font-weight:600; }
-  #fiche .ftags { display:flex; flex-wrap:wrap; gap:5px; margin-bottom:6px; min-height:4px; }
-  #fiche .ftags .tag { font-size:12px; padding:3px 8px; border-radius:4px; }
-  #fiche .cat { margin:0 0 14px; }
-  #fiche .none { color:#999; font-size:12px; }
-  #fiche .chips { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:6px; }
-  #fiche .chip { display:flex; align-items:center; gap:6px; background:var(--accent-bg); border-radius:14px; padding:2px 8px 2px 3px; font-size:12px; }
-  #fiche .chip .av { margin:0; border:0; width:22px; height:22px; font-size:9px; }
-  #fiche .chip .x { cursor:pointer; opacity:.5; } #fiche .chip .x:hover { opacity:1; }
+  #fiche .grow, .grow { flex:1; }
+  #fiche input[type=text], #fiche textarea, #modal input[type=text], #modal select, #menu input[type=text], #menu input[type=date] { font:inherit; padding:7px 9px; border:1px solid #ccc; border-radius:6px; background:#fff; min-width:0; max-width:100%; }
+  #fiche textarea { width:100%; resize:vertical; line-height:1.45; }
+  #fiche textarea.desc { min-height:190px; }
+  #fiche textarea.cmt { min-height:58px; }
+  .btn { font:inherit; border:1px solid var(--accent); background:var(--accent); color:#fff; border-radius:6px; padding:6px 12px; cursor:pointer; }
+  .btn.soft { background:var(--accent-bg); color:#2b3a9a; border-color:var(--accent-bg); font-weight:600; }
+  .btn.ghost { background:#fff; color:#555; border-color:#ccc; }
+  .chip { display:inline-flex; align-items:center; gap:6px; background:var(--accent-bg); border-radius:14px; padding:2px 8px 2px 3px; font-size:12px; }
+  .chip .av { margin:0; border:0; width:22px; height:22px; font-size:9px; }
+  .chip .x { cursor:pointer; opacity:.5; } .chip .x:hover { opacity:1; }
   .bar { height:7px; background:#e3e6ee; border-radius:4px; overflow:hidden; margin:2px 0 10px; }
   .bar > i { display:block; height:100%; background:var(--accent); transition:width .2s; }
   .ci { display:flex; align-items:center; gap:9px; margin:4px 0; }
@@ -100,20 +107,45 @@
   #fiche .ci input[type=text] { flex:1; border-color:transparent; background:transparent; padding:5px 6px; }
   #fiche .ci input[type=text]:hover, #fiche .ci input[type=text]:focus { border-color:#ccc; background:#fff; }
   .ci.done input[type=text] { text-decoration:line-through; color:#888; }
-  .ci .del { border:0; background:none; cursor:pointer; color:#999; font-size:17px; }
-  .ci .del:hover { color:#c00; }
-  .drop { border:2px dashed #b9c3ee; background:#f1f4ff; border-radius:8px; padding:18px; text-align:center; color:#33408f; cursor:pointer; }
+  .ci .del, .att .del, .cm .del { border:0; background:none; cursor:pointer; color:#999; font-size:16px; }
+  .ci .del:hover, .att .del:hover, .cm .del:hover { color:#c00; }
+  .drop { border:2px dashed #b9c3ee; background:#f1f4ff; border-radius:8px; padding:16px; text-align:center; color:#33408f; cursor:pointer; }
   .drop.over { background:#dfe6ff; border-color:var(--accent); }
   .drop b { text-decoration:underline; }
   .att { display:flex; align-items:center; gap:8px; padding:6px 8px; border:1px solid #e1e4ec; border-radius:6px; margin-bottom:6px; }
-  .att a { flex:1; color:var(--accent); text-decoration:none; cursor:pointer; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .att a { flex:1; color:var(--accent); cursor:pointer; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .att a:hover { text-decoration:underline; }
   .att .sz { color:var(--muted); font-size:11px; }
-  .att .del { border:0; background:none; cursor:pointer; color:#999; font-size:17px; }
+  /* commentaires */
+  .cm { display:flex; gap:9px; margin:10px 0 0; }
+  .cm .av { margin:0; border:0; width:28px; height:28px; }
+  .cm .cb { flex:1; min-width:0; }
+  .cm .ch { font-size:12px; color:var(--muted); } .cm .ch b { color:var(--txt); font-size:13px; }
+  .cm .ct { white-space:pre-wrap; word-wrap:break-word; margin:2px 0; line-height:1.4; }
+  .cm .ca { font-size:12px; } .cm .ca button { border:0; background:none; color:var(--accent); cursor:pointer; padding:0 8px 0 0; font:inherit; font-size:12px; }
+  .cm .rep { margin-left:0; padding-left:14px; border-left:2px solid #e3e6ee; }
+  .mention { color:var(--accent); font-weight:700; background:var(--accent-bg); border-radius:3px; padding:0 3px; }
 
+  /* menus déroulants, fenêtres */
+  #menu { display:none; position:fixed; z-index:40; background:#fff; border:1px solid #bbb; border-radius:8px; box-shadow:0 8px 28px rgba(0,0,0,.28); min-width:210px; max-width:300px; max-height:70vh; overflow-y:auto; padding:6px; }
+  #menu .mi { display:flex; align-items:center; gap:8px; padding:5px 8px; border-radius:5px; cursor:pointer; }
+  #menu .mi:hover { background:#f1f3fb; }
+  #menu .mi.pick { font-weight:600; }
+  #menu .mh { font-size:11px; color:var(--muted); padding:4px 8px; text-transform:uppercase; letter-spacing:.03em; }
+  #menu .sep { border-top:1px solid #eee; margin:6px 0; }
+  #menu .row { display:flex; gap:6px; padding:2px 4px; }
+  #menu .row input { flex:1; }
+  #menu .lnk { color:var(--accent); cursor:pointer; padding:4px 8px; border-radius:5px; display:block; font-size:12px; } #menu .lnk:hover { background:#f1f3fb; }
+  #modal { display:none; position:fixed; top:60px; left:50%; transform:translateX(-50%); width:min(520px,96vw); max-height:80vh; overflow-y:auto; background:#fff; border:1px solid #aaa; border-radius:10px; box-shadow:0 10px 34px rgba(0,0,0,.35); z-index:50; padding:14px 16px; }
+  #modal h3 { margin:0 0 10px; font-size:15px; }
+  #modal .mrow { display:flex; align-items:center; gap:8px; margin:5px 0; }
+  #modal .mrow input { flex:1; }
+  #modal .cnt { color:var(--muted); font-size:11px; white-space:nowrap; }
+  #modal .mmsg { margin:8px 0; font-size:12px; padding:6px 8px; background:#fff4d6; border-radius:5px; }
+  #modal .hint { font-size:11px; color:var(--muted); margin-top:8px; }
   #pop { display:none; position:fixed; top:80px; left:50%; transform:translateX(-50%); width:310px; background:#fff; border:1px solid #bbb; border-radius:6px; box-shadow:0 6px 24px rgba(0,0,0,.3); z-index:30; padding:12px; }
   #pop .row { display:flex; gap:6px; margin:8px 0; }
-  #pop select, #pop input { font:inherit; padding:5px 6px; border:1px solid #ccc; border-radius:4px; flex:1; min-width:0; }
+  #pop input { font:inherit; padding:5px 6px; border:1px solid #ccc; border-radius:4px; flex:1; min-width:0; }
   #pop button { font:inherit; padding:5px 10px; border:1px solid #ccc; border-radius:4px; background:#fff; cursor:pointer; }
   #pop button.primary { background:var(--accent); color:#fff; border-color:var(--accent); }
   #pop .hint { font-size:11px; color:var(--muted); }
@@ -121,17 +153,17 @@
 </head>
 <body>
 <header id="hdr"></header>
-<div id="warn"></div>
-<div id="err"></div>
-<div id="diag" style="display:none"></div>
+<div id="bands"><div id="warn"></div><div id="err"></div><div id="diag" style="display:none"></div></div>
 <div id="board"><div class="msg">Chargement… Associez les colonnes dans le panneau de configuration du widget.</div></div>
 <div id="panel"></div>
 <div id="fiche"></div>
+<div id="menu"></div>
+<div id="modal"></div>
 <div id="pop"></div>
 
 <script>
 /* ============ CONFIGURATION ============ */
-const VERSION = '2026-10-30 e';   // affichée dans le bandeau bleu : permet de vérifier que le bon fichier est chargé
+const VERSION = '2026-10-30 f';   // affichée dans le bandeau et le diagnostic : permet de vérifier que le bon fichier est chargé
 const STATUTS = ['A faire','En cours','Bloqué','A valider','Terminé','Abandonné','Archivé'];
 const PRIOS   = ['P0 Critique','P1 Important','P2 Souhaitable','P3 Appréciable','Nouveau','Abandonné','Déjà prévu'];
 const CHARGES = ['XS','S','M','L','XL'];
@@ -141,31 +173,59 @@ const PRIO_COLORS   = ['#e5484d','#f5a623','#1e9ac8','#6b8fb8','#9bbf5a','#8a8f9
 const PALETTE = [['#fdf1c4','#6b5a10'],['#fcd9d9','#8a2b2b'],['#d6eef7','#1f5f78'],['#dcebd9','#355a2f'],
                  ['#e8dcf5','#59397a'],['#ffe2c9','#8a4a12'],['#d9ecec','#245f5f'],['#ffd9e8','#8a2b55']];
 const PRIO_TAG = [[/^P0/,['#fcd9d9','#b3202f']],[/^P1/,['#fff0c2','#8a5a00']],[/^P2/,['#d6eef7','#1f5f78']],[/^P3/,['#dde6f2','#3b5a80']]];
-// Catégories d'étiquettes modifiables (clé du widget, libellé)
-const TAG_CATS = [['etiquettes','Étiquettes'],['personas','Personas'],['themes','Thèmes'],['produit','Produit'],['sources','Sources']];
+
+// Table des commentaires (à créer dans Grist, voir le guide). Les noms de colonnes sont ceux-ci :
+const COMMENTS = {table:'Commentaires', task:'Tache', parent:'Parent', text:'Texte', author:'Auteur', date:'Date', mentions:'Mentions'};
+const COMMENTS_POLL_MS = 15000;
+
+// Champs modifiables depuis la carte et la fiche
+const FIELDS = [
+  {key:'statut',       label:'Statut',       kind:'single', fallback:STATUTS},
+  {key:'prio',         label:'Prio',         kind:'single', fallback:PRIOS},
+  {key:'charge',       label:'Charge',       kind:'single', fallback:CHARGES},
+  {key:'personas',     label:'Personas',     kind:'tags'},
+  {key:'themes',       label:'Thèmes',       kind:'tags'},
+  {key:'produit',      label:'Produit',      kind:'tags'},
+  {key:'sources',      label:'Sources',      kind:'tags'},
+  {key:'etiquettes',   label:'Étiquettes',   kind:'tags'},
+  {key:'responsables', label:'Responsables', kind:'people'},
+  {key:'echeance',     label:'Échéance',     kind:'date'},
+];
+// Filtres (tous à choix multiples)
+const FILTERS = [
+  {id:'statut',     key:'statut',    label:'Statut',    skipIn:'backlog'},
+  {id:'prio',       key:'prio',      label:'Prio',      skipIn:'backlog'},
+  {id:'charge',     key:'charge',    label:'Charge'},
+  {id:'personas',   key:'personas',  label:'Personas'},
+  {id:'themes',     key:'themes',    label:'Thèmes'},
+  {id:'personne',   key:'personnes', label:'Personne',  skipIn:'perso', field:'responsables'},
+  {id:'produit',    key:'produit',   label:'Produit'},
+  {id:'sources',    key:'sources',   label:'Sources'},
+  {id:'etiquettes', key:'etiquettes',label:'Étiquettes'},
+];
 
 const COLS = [
   {name:'titre',        title:'Titre de la tâche',                    type:'Text'},
-  {name:'groupe',       title:'Colonne du Kanban (Statut ou Prio)',   type:'Choice'},
-  {name:'statut',       title:'Statut (backlog/suivi et dates)',      type:'Choice', optional:true},
-  {name:'prio',         title:'Priorité',                             type:'Choice', optional:true},
+  {name:'statut',       title:'Statut (colonnes du Suivi)',           type:'Choice'},
+  {name:'prio',         title:'Priorité (colonnes du Backlog)',       type:'Choice'},
   {name:'charge',       title:'Charge (XS…XL)',                       type:'Choice', optional:true},
   {name:'personas',     title:'Personas',                             type:'Choice,ChoiceList', optional:true},
   {name:'produit',      title:'Produit',                              type:'Choice,ChoiceList', optional:true},
   {name:'themes',       title:'Thèmes',                               type:'Choice,ChoiceList', optional:true},
   {name:'sources',      title:'Sources',                              type:'Choice,ChoiceList', optional:true},
   {name:'etiquettes',   title:'Étiquettes libres (Liste de choix)',   type:'ChoiceList', optional:true},
-  {name:'responsables',title:'Responsables (colonne de RÉFÉRENCE vers Equipe)', type:'Ref,RefList', optional:true},
+  {name:'responsables', title:'Responsables (colonne de RÉFÉRENCE vers Equipe)', type:'Ref,RefList', optional:true},
   {name:'personnes',    title:'Responsables (colonne texte, si pas de référence)', type:'Text,ChoiceList', optional:true},
   {name:'echeance',     title:"Date d'échéance",                      type:'Date,DateTime', optional:true},
   {name:'description',  title:'Description (colonne Texte)',          type:'Text', optional:true},
   {name:'checklist',    title:'Checklist (colonne Texte)',            type:'Text', optional:true},
   {name:'pj',           title:'Pièces jointes',                       type:'Attachments', optional:true},
-  {name:'commentaires', title:'Nb de commentaires',                   type:'Int,Numeric', optional:true},
+  {name:'commentaires', title:'Nb de commentaires (inutile si table Commentaires)', type:'Int,Numeric', optional:true},
   {name:'votes',        title:'Votes',                                type:'Int,Numeric', optional:true},
 ];
 
 /* ============ ÉTAT ============ */
+const $ = id => document.getElementById(id);
 let mode = 'suivi';            // suivi | backlog | perso
 let moi = '';                  // nom de la personne pour le mode "perso"
 let map = null;                // association des colonnes
@@ -173,24 +233,23 @@ let host = null;               // identifiant de la table où le widget est inst
 let rawRecs = [];              // lignes telles que reçues de Grist
 let records = [];              // lignes converties (noms du widget)
 let index = new Map();         // id -> enregistrement
+let pending = new Map();       // id -> {changes, t} : modifications en cours d'enregistrement (évite les effets de retour en arrière)
 let colors = {groups:{}, tags:{}};
 let colOrder = {};             // ordre des colonnes du Kanban, par mode
 let thr = {orange:3, red:1};
 let panelOpen = false;
 let openId = null;             // carte ouverte dans la fiche
 let ficheSig = '';             // signature de la carte affichée (évite de reconstruire la fiche inutilement)
-let metaTick = 0;              // change quand les métadonnées arrivent (reconstruit la fiche)
-let meta = {};                 // clé du widget -> {col, type, choices}
-let metaSig = '';
-let team = [];                 // [{id, label}] : table référencée par "Responsables"
-let teamById = {};
+let metaTick = 0, metaSig = '', meta = {}, metaNote = '';
+let team = [], teamById = {}, teamCol = null, teamTable = null;
 let attMeta = {};              // id de pièce jointe -> {name, size}
 let uploading = false;
-let rawFirst = null;
-let nCalls = 0, lastCall = '';   // diagnostic
-let diagOpen = false, tableCount = null, metaNote = '';
-let focusAfter = null;         // champ à refocaliser après reconstruction de la fiche
-const F = {prio:'',charge:'',persona:'',theme:'',personne:'',produit:'',source:'',etiquette:'',from:'',to:'',q:''};
+let comments = [], commentsOk = null, commentsNote = '', commentsTick = 0, commentsSig = '';
+let drafts = {};               // brouillons de commentaires
+let menu = null;               // menu déroulant ouvert : {anchor, build}
+let manage = null;             // fenêtre "gérer les valeurs" : {key, confirm, msg}
+let rawFirst = null, nCalls = 0, lastCall = '', diagOpen = false, tableCount = null;
+const F = {statut:[],prio:[],charge:[],personas:[],themes:[],personne:[],produit:[],sources:[],etiquettes:[],from:'',to:'',q:''};
 
 /* ============ OUTILS ============ */
 const esc = s => String(s ?? '').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -203,6 +262,14 @@ function refIds(v){   // identifiants de lignes d'une colonne Référence / List
   if (v == null || v === '' || v === 0) return [];
   const arr = Array.isArray(v) ? (v[0]==='L' ? v.slice(1) : v) : [v];
   return arr.map(x=> (x && typeof x==='object') ? (x.rowId ?? x.id) : x).filter(x=>typeof x==='number' && x>0);
+}
+function g(r,k){ return map && map[k] ? r[k] : undefined; }
+// valeurs d'une fiche pour un champ, sous forme de liste de textes
+function L(r,k){
+  const v = g(r,k);
+  if (k==='personnes') return toList(v);
+  if (Array.isArray(v)) return toList(v);
+  return v==null || v==='' ? [] : [String(v)];
 }
 function hash(s){ let h=0; for (const c of String(s)) h=(h*31+c.charCodeAt(0))|0; return Math.abs(h); }
 function rgb(hex){ const n=parseInt(hex.slice(1),16); return [n>>16&255,n>>8&255,n&255]; }
@@ -217,12 +284,9 @@ function tagColors(label,kind){
   if (colors.tags[label]) return [lighten(colors.tags[label],.8), darken(colors.tags[label],.45)];
   return defaultTagColors(label,kind);
 }
-function tag(label, kind){
-  const c = tagColors(label,kind);
-  return `<span class="tag" style="background:${c[0]};color:${c[1]}">${esc(label)}</span>`;
-}
+function tag(label, kind){ const c = tagColors(label,kind); return `<span class="tag" style="background:${c[0]};color:${c[1]}">${esc(label)}</span>`; }
 function tagX(label, key){
-  return tag(label).replace(/<\/span>$/, `<span class="x" data-rm="${key}" data-val="${esc(label)}" title="Retirer">×</span></span>`);
+  return tag(label, key==='prio'?'prio':'').replace(/<\/span>$/, `<span class="x" data-rm="${key}" data-val="${esc(label)}" title="Retirer">×</span></span>`);
 }
 function toDate(v){
   if (v == null || v === '') return null;
@@ -231,12 +295,11 @@ function toDate(v){
 }
 function dayStart(d){ const x=new Date(d); x.setHours(0,0,0,0); return x; }
 function fmtDate(d){ return d.toLocaleDateString('fr-FR',{day:'numeric',month:'short'}); }
-function initials(n){ return n.split(/\s+/).filter(Boolean).map(w=>w[0]).join('').slice(0,2).toUpperCase(); }
+function fmtDateTime(d){ return d.toLocaleDateString('fr-FR',{day:'numeric',month:'short'})+' '+d.toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'}); }
+function initials(n){ return String(n||'?').split(/\s+/).filter(Boolean).map(w=>w[0]).join('').slice(0,2).toUpperCase(); }
 function fmtSize(n){ if(!n) return ''; return n>1048576 ? (n/1048576).toFixed(1)+' Mo' : Math.max(1,Math.round(n/1024))+' Ko'; }
-function g(r,k){ return map && map[k] ? r[k] : undefined; }
 
-// Grist peut envoyer les lignes avec les noms réels des colonnes (Titre, Statut…) ou déjà renommées (titre, groupe…).
-// On les ramène toujours aux noms du widget.
+// Grist peut envoyer les lignes avec les noms réels des colonnes (Titre, Statut…) ou déjà renommées (titre, statut…).
 function normalize(rec){
   const out = {id: rec.id};
   for (const k in map){
@@ -244,33 +307,28 @@ function normalize(rec){
     out[k] = (c in rec) ? rec[c] : rec[k];
   }
   derive(out);
+  const p = pending.get(out.id);
+  if (p){ if (Date.now()-p.t < 4000){ Object.assign(out, p.changes); derive(out); } else pending.delete(out.id); }
   return out;
 }
 function derive(r){   // noms des responsables, à partir de la colonne de référence
   if (map && map.responsables && teamById && Object.keys(teamById).length)
     r.personnes = refIds(r.responsables).map(id=>teamById[id] || ('#'+id)).join(', ');
 }
-function ingest(){
-  records = (rawRecs && map) ? rawRecs.map(normalize) : [];
-  render();
-}
+function ingest(){ records = (rawRecs && map) ? rawRecs.map(normalize) : []; render(); }
 
-/* ---- Checklist : texte, une ligne par point "- [ ] à faire" / "- [x] fait" ---- */
+/* ---- Checklist ---- */
 const CL_RE = /^(\s*[-*]\s*)\[( |x|X)\]\s?(.*)$/;
 function parseChecklist(text){
-  const lines = String(text||'').split('\n');
-  const items = [];
+  const lines = String(text||'').split('\n'), items = [];
   lines.forEach((l,i)=>{ const m = l.match(CL_RE); if (m) items.push({i, done:m[2].toLowerCase()==='x', text:m[3]}); });
   return {lines, items};
 }
-function checklistCount(t){
-  const {items} = parseChecklist(t);
-  return {done: items.filter(x=>x.done).length, total: items.length};
-}
+function checklistCount(t){ const {items} = parseChecklist(t); return {done: items.filter(x=>x.done).length, total: items.length}; }
 
-/* ============ MÉTADONNÉES DES COLONNES (choix possibles, table des responsables) ============ */
+/* ============ MÉTADONNÉES DES COLONNES ============ */
 async function loadMeta(){
-  meta = {}; team = []; teamById = {}; metaNote = '';
+  meta = {}; team = []; teamById = {}; teamCol = null; teamTable = null; metaNote = '';
   try {
     const T = await grist.docApi.fetchTable('_grist_Tables');
     const C = await grist.docApi.fetchTable('_grist_Tables_column');
@@ -280,170 +338,480 @@ async function loadMeta(){
     C.id.forEach((id,i)=>{ if (C.parentId[i]===ti) cols[C.colId[i]] = {type:C.type[i], wo:C.widgetOptions[i], vis:C.visibleCol[i]}; });
     for (const k in map){
       const c = map[k]; if (!c || c[0]==='@' || !cols[c]) continue;
-      let choices = []; try { choices = (JSON.parse(cols[c].wo||'{}').choices) || []; } catch(e){}
+      let woObj = {}; try { woObj = JSON.parse(cols[c].wo||'{}') || {}; } catch(e){}
       const m = String(cols[c].type).match(/^Ref(?:List)?:(.+)$/);
-      meta[k] = {col:c, type:String(cols[c].type), choices, ref: m ? m[1] : null, visCol: cols[c].vis ? colById[cols[c].vis] : null};
+      meta[k] = {col:c, type:String(cols[c].type), woObj, choices:(woObj.choices||[]).map(String), ref: m ? m[1] : null, visCol: cols[c].vis ? colById[cols[c].vis] : null};
     }
     if (meta.responsables && meta.responsables.ref){
-      const tbl = meta.responsables.ref;
-      const E = await grist.docApi.fetchTable(tbl);
+      teamTable = meta.responsables.ref;
+      const E = await grist.docApi.fetchTable(teamTable);
       let lab = meta.responsables.visCol;
       if (!lab || !(lab in E)) lab = ['Nom','nom','NOM','Name','name','Titre'].find(x=>x in E) || Object.keys(E).find(x=>!/^(id|manualSort|gristHelper_)/.test(x));
+      teamCol = lab;
       (E.id||[]).forEach((id,i)=>{ const label = String(E[lab] ? E[lab][i] : '').trim(); if (label) { team.push({id, label}); teamById[id] = label; } });
       team.sort((a,b)=>a.label.localeCompare(b.label,'fr'));
-      metaNote = `table des responsables « ${tbl} » (colonne « ${lab} ») : ${team.length} personne(s)`;
+      metaNote = `table « ${teamTable} » (colonne « ${lab} ») : ${team.length} personne(s)`;
     }
   } catch(e){ metaNote = 'métadonnées indisponibles : '+((e&&e.message)||e); }
   metaTick++;
 }
-async function ensureMeta(){
+async function ensureMeta(force){
   const sig = host+'|'+JSON.stringify(map);
-  if (!host || !map || sig===metaSig) return;
+  if (!host || !map || (sig===metaSig && !force)) return;
   metaSig = sig;
   await loadMeta();
   ingest();
 }
+async function reloadMeta(){ metaSig=''; await ensureMeta(true); }
+// valeurs proposées : choix déclarés dans la colonne Grist (sinon valeurs par défaut) + valeurs déjà utilisées
 function choicesFor(k, fallback=[]){
   const base = (meta[k] && meta[k].choices && meta[k].choices.length) ? meta[k].choices : fallback;
-  const used = [...new Set(records.flatMap(r=>toList(g(r,k))))];
+  const used = [...new Set(records.flatMap(r=>L(r,k)))];
   return [...new Set([...base.map(String), ...used])];
+}
+function isListCol(key){
+  if (meta[key] && meta[key].type) return /^ChoiceList/.test(meta[key].type);
+  const vals = records.map(r=>g(r,key)).filter(v=>v!=null && v!=='');
+  return vals.length===0 || vals.some(v=>Array.isArray(v));
+}
+function isListRef(){
+  if (meta.responsables && meta.responsables.type) return /^RefList/.test(meta.responsables.type);
+  return records.some(r=>Array.isArray(r.responsables));
 }
 async function loadAttachMeta(){
   try {
     const A = await grist.docApi.fetchTable('_grist_Attachments');
     attMeta = {}; (A.id||[]).forEach((id,i)=>{ attMeta[id] = {name:A.fileName ? A.fileName[i] : ('Fichier '+id), size:A.fileSize ? A.fileSize[i] : 0}; });
   } catch(e){}
-  metaTick++; ficheSig=''; renderFiche();
+  refreshFiche();
+}
+
+/* ============ COMMENTAIRES (table séparée) ============ */
+async function loadComments(){
+  let sig = '';
+  try {
+    const t = await grist.docApi.fetchTable(COMMENTS.table);
+    const miss = [COMMENTS.task, COMMENTS.text].filter(c=>!(c in t));
+    if (miss.length) throw new Error('colonne(s) absente(s) dans « '+COMMENTS.table+' » : '+miss.join(', '));
+    const list = [];
+    (t.id||[]).forEach((id,i)=>{
+      list.push({id, task: refIds(t[COMMENTS.task][i])[0] || 0, parent: t[COMMENTS.parent] ? (refIds(t[COMMENTS.parent][i])[0]||0) : 0,
+        text: String(t[COMMENTS.text][i] ?? ''), author: t[COMMENTS.author] ? String(t[COMMENTS.author][i] ?? '') : '',
+        date: t[COMMENTS.date] ? toDate(t[COMMENTS.date][i]) : null});
+    });
+    comments = list; commentsOk = true; commentsNote = list.length+' commentaire(s)';
+    sig = JSON.stringify(list);
+  } catch(e){ comments = []; commentsOk = false; commentsNote = ((e&&e.message)||String(e)); sig = 'ko:'+commentsNote; }
+  if (sig !== commentsSig){ commentsSig = sig; commentsTick++; render(); }
+}
+const commentsOf = id => comments.filter(c=>c.task===id);
+function commentCount(r){ return commentsOk ? commentsOf(r.id).length : (Number(g(r,'commentaires'))||0); }
+async function addComment(taskId, parentId, text){
+  text = String(text||'').trim(); if (!text) return false;
+  const fields = {[COMMENTS.task]: taskId, [COMMENTS.text]: text};
+  if (parentId) fields[COMMENTS.parent] = parentId;
+  const ids = team.filter(p=>text.includes('@'+p.label)).map(p=>p.id);
+  if (ids.length) fields[COMMENTS.mentions] = ['L', ...ids];
+  try { await grist.docApi.applyUserActions([['AddRecord', COMMENTS.table, null, fields]]); }
+  catch(e){
+    if (ids.length){ delete fields[COMMENTS.mentions];   // colonne Mentions absente : on réessaie sans
+      try { await grist.docApi.applyUserActions([['AddRecord', COMMENTS.table, null, fields]]); } catch(e2){ alert('Commentaire non enregistré : '+((e2&&e2.message)||e2)); return false; } }
+    else { alert('Commentaire non enregistré : '+((e&&e.message)||e)); return false; }
+  }
+  await loadComments(); return true;
+}
+async function deleteComment(id){
+  const del = new Set([id]); let grown = true;
+  while (grown){ grown = false; comments.forEach(c=>{ if (c.parent && del.has(c.parent) && !del.has(c.id)){ del.add(c.id); grown = true; } }); }
+  try { await grist.docApi.applyUserActions([...del].map(i=>['RemoveRecord', COMMENTS.table, i])); } catch(e){ alert('Suppression impossible : '+((e&&e.message)||e)); }
+  await loadComments();
+}
+function mentionHtml(text){
+  let h = esc(text);
+  [...team].sort((a,b)=>b.label.length-a.label.length).forEach(p=>{ h = h.split('@'+esc(p.label)).join(`<span class="mention">@${esc(p.label)}</span>`); });
+  return h;
 }
 
 /* ============ ÉCRITURE DANS GRIST ============ */
 // Met à jour la carte tout de suite à l'écran (optimiste), puis écrit dans Grist.
 // changes : {cléWidget: valeur affichée} ; encoded : {cléWidget: valeur envoyée à Grist} (listes : ['L', ...])
 async function update(card, changes, encoded){
-  const cols = {};
+  const cols = {}, applied = {};
   for (const k in changes){
     if (!map[k]) continue;
-    card[k] = changes[k];
+    card[k] = changes[k]; applied[k] = changes[k];
     cols[map[k]] = (encoded && k in encoded) ? encoded[k] : changes[k];
   }
-  if (!Object.keys(cols).length) return;
-  derive(card);
-  render();
-  await act([['UpdateRecord', host, card.id, cols]]);
+  if (!Object.keys(cols).length) return false;
+  const p = pending.get(card.id) || {changes:{}, t:0};
+  Object.assign(p.changes, applied); p.t = Date.now(); pending.set(card.id, p);
+  derive(card); render();
+  const ok = await act([['UpdateRecord', host, card.id, cols]]);
+  if (!ok){ pending.delete(card.id); ingest(); }
+  return ok;
 }
 async function act(actions){
-  if (!host){ alert("Table du widget introuvable : rechargez la page."); return; }
-  try { await grist.docApi.applyUserActions(actions); }
-  catch(e){ alert('Action refusée ou impossible : ' + ((e && e.message) || e)); }
+  if (!host){ alert("Table du widget introuvable : rechargez la page."); return false; }
+  try { await grist.docApi.applyUserActions(actions); return true; }
+  catch(e){ alert('Action refusée ou impossible : ' + ((e && e.message) || e)); return false; }
 }
 
-/* ============ COLONNES DU KANBAN (ordre modifiable) ============ */
+/* ============ VALEURS D'UN CHAMP (carte, fiche, filtres) ============ */
+const fieldOn = f => map && (f.key==='responsables' ? (map.responsables || map.personnes) : map[f.key]);
+function optionsFor(key){   // [{v, label}]
+  if (key==='responsables') return team.map(t=>({v:t.id, label:t.label}));
+  const f = FIELDS.find(x=>x.key===key);
+  return choicesFor(key, (f && f.fallback) || []).map(v=>({v, label:v}));
+}
+function isMulti(key){ return key==='responsables' ? isListRef() : (FIELDS.find(x=>x.key===key).kind==='tags' && isListCol(key)); }
+function selectedOf(card, key){   // valeurs sélectionnées (ids pour les personnes)
+  if (key==='responsables') return refIds(card.responsables);
+  return L(card, key);
+}
+function setField(card, key, v){   // choisit (ou décoche) une valeur
+  if (key==='responsables'){
+    const list = isListRef(), cur = refIds(card.responsables), has = cur.includes(v);
+    const ids = list ? (has ? cur.filter(x=>x!==v) : [...cur, v]) : (has ? [] : [v]);
+    return update(card, {responsables: list ? ids : (ids[0]||0)}, {responsables: list ? ['L',...ids] : (ids[0]||0)});
+  }
+  const cur = L(card,key), has = cur.includes(v);
+  if (isMulti(key)){ const next = has ? cur.filter(x=>x!==v) : [...cur, v]; return update(card, {[key]: next}, {[key]: ['L',...next]}); }
+  return update(card, {[key]: has ? null : v});
+}
+function clearField(card, key){
+  if (key==='responsables') return update(card, {responsables: isListRef()?[]:0}, {responsables: isListRef()?['L']:0});
+  if (isMulti(key)) return update(card, {[key]: []}, {[key]: ['L']});
+  return update(card, {[key]: null});
+}
+function removeValue(card, key, v){ if (key==='responsables') return setField(card,key,+v); return setField(card,key,String(v)); }
+
+/* --- création de nouvelles valeurs --- */
+async function widgetOptsWrite(key, mutate){
+  const m = meta[key]; if (!m) throw new Error('colonne introuvable (métadonnées non chargées)');
+  const wo = JSON.parse(JSON.stringify(m.woObj||{})); wo.choices = [...(wo.choices||m.choices||[])];
+  mutate(wo);
+  await grist.docApi.applyUserActions([['ModifyColumn', host, m.col, {widgetOptions: JSON.stringify(wo)}]]);
+}
+async function addChoice(key, v){
+  if (!meta[key] || meta[key].choices.includes(v)) return;
+  try { await widgetOptsWrite(key, wo=>wo.choices.push(v)); await reloadMeta(); } catch(e){ /* sans droit sur la structure : la valeur est quand même utilisable */ }
+}
+async function createPerson(name){
+  if (!teamTable || !teamCol) throw new Error('table des responsables introuvable');
+  const res = await grist.docApi.applyUserActions([['AddRecord', teamTable, null, {[teamCol]: name}]]);
+  const id = res && res.retValues && res.retValues[0];
+  await reloadMeta(); return id;
+}
+async function createAndSet(card, key, name){
+  name = String(name||'').trim(); if (!name) return;
+  if (key==='responsables'){
+    try { const id = await createPerson(name); if (typeof id==='number' && !refIds(card.responsables).includes(id)) await setField(card,key,id); }
+    catch(e){ alert('Création impossible : '+((e&&e.message)||e)); }
+    return;
+  }
+  if (FIELDS.find(f=>f.key===key).kind==='tags' || true){ await addChoice(key, name); }
+  if (!L(card,key).includes(name)) await setField(card,key,name);
+}
+
+/* ============ MENUS DÉROULANTS ============ */
+function openMenu(anchor, build){ if (menu && menu.anchor===anchor){ closeMenu(); return; } menu = {anchor, build}; renderMenu(); }
+function closeMenu(){ menu = null; $('menu').style.display='none'; }
+function renderMenu(){
+  const el = $('menu');
+  if (!menu){ el.style.display='none'; return; }
+  const a = document.querySelector(`[data-anchor="${menu.anchor}"]`);
+  if (!a){ el.style.display='none'; return; }
+  const ae = document.activeElement;
+  if (el.contains(ae) && ae.tagName==='INPUT' && ae.value) return;          // on ne casse pas une saisie en cours
+  const b = menu.build();
+  el.innerHTML = b.html; el.style.display = 'block';
+  const r = a.getBoundingClientRect();
+  const w = el.offsetWidth, h = el.offsetHeight;
+  el.style.left = Math.max(6, Math.min(r.left, window.innerWidth - w - 8))+'px';
+  el.style.top  = (r.bottom + h + 12 > window.innerHeight && r.top > h + 12 ? Math.max(6, r.top - h - 4) : r.bottom + 4)+'px';
+  b.bind(el);
+}
+function fieldPicker(cardId){
+  return ()=>({ html: '<div class="mh">Ajouter / modifier</div>' + FIELDS.filter(fieldOn).map(f=>`<div class="mi" data-pk="${f.key}">${f.label}</div>`).join(''),
+    bind: el=>el.querySelectorAll('[data-pk]').forEach(x=>x.onclick=()=>{ menu.build = fieldMenu(cardId, x.dataset.pk, true); renderMenu(); }) });
+}
+function fieldMenu(cardId, key, fromPicker){
+  return ()=>{
+    const f = FIELDS.find(x=>x.key===key), c = index.get(cardId);
+    if (!c) return {html:'', bind(){}};
+    let html = `<div class="mh">${fromPicker?'<span class="lnk" data-back style="display:inline;padding:0 6px 0 0">←</span>':''}${f.label}</div>`;
+    if (f.kind==='date'){
+      const d = toDate(g(c,'echeance')), editable = meta.echeance && meta.echeance.type==='Date';
+      html += editable ? `<div class="row"><input type="date" id="mn-date" value="${d?d.toISOString().slice(0,10):''}"></div>${d?'<span class="lnk" data-clr>Effacer la date</span>':''}`
+                       : `<div class="mh" style="text-transform:none">Modifiable seulement pour une colonne de type « Date » (pas « Date et heure »).</div>`;
+    } else {
+      const multi = isMulti(key), sel = selectedOf(c,key).map(String);
+      if (key==='statut') html += `<label class="mi ${!sel.length?'pick':''}"><input type="radio" data-opt="" ${!sel.length?'checked':''}> Aucun (Backlog)</label>`;
+      html += optionsFor(key).map(o=>{ const on = sel.includes(String(o.v));
+        return `<label class="mi ${on?'pick':''}"><input type="${multi?'checkbox':'radio'}" data-opt="${esc(o.v)}" ${on?'checked':''}> ${f.kind==='single'||f.kind==='tags'?tag(o.label, key==='prio'?'prio':''):esc(o.label)}</label>`; }).join('');
+      if (!optionsFor(key).length) html += '<div class="mh" style="text-transform:none">Aucune valeur : ajoutez-en ci-dessous.</div>';
+      html += `<div class="sep"></div><div class="row"><input type="text" id="mn-new" placeholder="${key==='responsables'?'Nouvelle personne…':'Nouvelle valeur…'}" autocomplete="off"><button class="btn soft" id="mn-add">+</button></div>
+        <span class="lnk" data-mg>⚙ Gérer les valeurs…</span>`;
+    }
+    return { html, bind: el=>{
+      const back = el.querySelector('[data-back]'); if (back) back.onclick = ()=>{ menu.build = fieldPicker(cardId); renderMenu(); };
+      el.querySelectorAll('[data-opt]').forEach(i=>i.onchange = ()=>{
+        const cur = index.get(cardId); if (!cur) return;
+        const raw = i.dataset.opt;
+        if (key==='statut' && raw===''){ update(cur,{statut:null}); return; }
+        const v = key==='responsables' ? +raw : raw;
+        if (!isMulti(key) && L(cur,key).includes(String(v))){ setField(cur,key,v); return; }
+        setField(cur, key, v);
+        if (!isMulti(key)) closeMenu();
+      });
+      const dt = el.querySelector('#mn-date'); if (dt) dt.onchange = ()=>{ const v=dt.value, cur=index.get(cardId); if(cur) update(cur,{echeance: v ? Date.UTC(+v.slice(0,4), +v.slice(5,7)-1, +v.slice(8,10))/1000 : null}); };
+      const cl = el.querySelector('[data-clr]'); if (cl) cl.onclick = ()=>{ const cur=index.get(cardId); if(cur) update(cur,{echeance:null}); closeMenu(); };
+      const add = ()=>{ const inp = el.querySelector('#mn-new'); const v = inp.value; inp.value=''; const cur=index.get(cardId); if (cur && v.trim()) createAndSet(cur, key, v); };
+      const ab = el.querySelector('#mn-add'); if (ab){ ab.onclick = add; el.querySelector('#mn-new').onkeydown = e=>{ if(e.key==='Enter'){ e.preventDefault(); add(); } }; }
+      const mg = el.querySelector('[data-mg]'); if (mg) mg.onclick = ()=>{ closeMenu(); openManage(key); };
+    }};
+  };
+}
+function filterMenu(f){
+  return ()=>{
+    const opts = filterOptions(f);
+    const html = `<div class="mh">${f.label}</div>` + (opts.map(o=>`<label class="mi"><input type="checkbox" data-fo="${esc(o)}" ${F[f.id].includes(o)?'checked':''}> ${tag(o, f.key==='prio'?'prio':'')}</label>`).join('') || '<div class="mh" style="text-transform:none">Aucune valeur</div>')
+      + `<div class="sep"></div>${F[f.id].length?'<span class="lnk" data-fclr>Tout décocher</span>':''}<span class="lnk" data-mg>⚙ Gérer les valeurs…</span>`;
+    return { html, bind: el=>{
+      el.querySelectorAll('[data-fo]').forEach(i=>i.onchange=()=>{ const v=i.dataset.fo; F[f.id] = i.checked ? [...F[f.id].filter(x=>x!==v), v] : F[f.id].filter(x=>x!==v); render(); });
+      const c = el.querySelector('[data-fclr]'); if (c) c.onclick = ()=>{ F[f.id]=[]; render(); };
+      el.querySelector('[data-mg]').onclick = ()=>{ closeMenu(); openManage(f.field||f.key); };
+    }};
+  };
+}
+function filterOptions(f){
+  if (f.key==='personnes') return [...new Set([...team.map(t=>t.label), ...records.flatMap(r=>L(r,'personnes'))])].sort((a,b)=>a.localeCompare(b,'fr'));
+  const fld = FIELDS.find(x=>x.key===f.key);
+  return choicesFor(f.key, (fld && fld.fallback) || []);
+}
+
+/* ============ GÉRER LES VALEURS (ajouter / renommer / supprimer) ============ */
+function manageKeys(){ return FIELDS.filter(f=>f.kind!=='date' && fieldOn(f) && (f.key!=='responsables' || (map.responsables && teamTable))); }
+function openManage(key){ manage = {key: key==='personnes' ? 'responsables' : key, confirm:null, msg:''}; closeMenu(); renderManage(); }
+function closeManage(){ manage = null; $('modal').style.display='none'; }
+function usage(key, v){
+  if (key==='responsables') return records.filter(r=>refIds(r.responsables).includes(v)).length;
+  return records.filter(r=>L(r,key).includes(v)).length;
+}
+function renderManage(){
+  const m = $('modal');
+  if (!manage){ m.style.display='none'; return; }
+  const keys = manageKeys();
+  if (!keys.find(k=>k.key===manage.key)) manage.key = keys[0] && keys[0].key;
+  if (!manage.key){ m.style.display='block'; m.innerHTML = '<h3>Gérer les valeurs</h3><div class="mmsg">Aucun champ à gérer : associez des colonnes au widget.</div><div class="mrow"><button class="btn ghost" id="mg-close">Fermer</button></div>'; $('mg-close').onclick=closeManage; return; }
+  const key = manage.key, people = key==='responsables';
+  const vals = people ? team.map(t=>({v:t.id,label:t.label})) : optionsFor(key);
+  m.style.display = 'block';
+  m.innerHTML = `<h3>Gérer les valeurs <button class="close" id="mg-x" style="float:right">×</button></h3>
+    <div class="mrow"><label>Champ</label><select id="mg-field">${keys.map(k=>`<option value="${k.key}" ${k.key===key?'selected':''}>${k.label}</option>`).join('')}</select></div>
+    ${manage.msg?`<div class="mmsg">${esc(manage.msg)}</div>`:''}
+    ${vals.map(o=>`<div class="mrow"><input type="text" data-ren="${esc(o.v)}" value="${esc(o.label)}"><span class="cnt">${usage(key,o.v)} carte(s)</span>
+      <button class="btn ${manage.confirm===String(o.v)?'':'ghost'}" data-del="${esc(o.v)}" style="${manage.confirm===String(o.v)?'background:#c0392b;border-color:#c0392b':''}">${manage.confirm===String(o.v)?'Confirmer ?':'🗑'}</button></div>`).join('') || '<div class="none">Aucune valeur.</div>'}
+    <div class="mrow"><input type="text" id="mg-new" placeholder="${people?'Nouvelle personne…':'Nouvelle valeur…'}" autocomplete="off"><button class="btn" id="mg-add">Ajouter</button></div>
+    <div class="hint">${people ? 'Les personnes sont celles de la table « '+esc(teamTable)+' ». Supprimer une personne la retire aussi de toutes les cartes.' : 'Les valeurs sont les choix de la colonne Grist. Renommer met aussi à jour toutes les cartes ; supprimer retire la valeur de toutes les cartes. Il faut le droit de modifier la structure du document.'}</div>
+    <div class="mrow"><span class="grow"></span><button class="btn ghost" id="mg-close">Fermer</button></div>`;
+  $('mg-x').onclick = closeManage; $('mg-close').onclick = closeManage;
+  $('mg-field').onchange = e=>{ manage = {key:e.target.value, confirm:null, msg:''}; renderManage(); };
+  const addV = ()=>{ const v = $('mg-new').value.trim(); if (v) runManage(()=>mgAdd(key,v)); };
+  $('mg-add').onclick = addV; $('mg-new').onkeydown = e=>{ if(e.key==='Enter'){ e.preventDefault(); addV(); } };
+  m.querySelectorAll('[data-ren]').forEach(i=>i.onchange=()=>{ const old = people ? +i.dataset.ren : i.dataset.ren, nv = i.value.trim(); if (nv && nv!==String(people?teamById[old]:old)) runManage(()=>mgRename(key,old,nv)); else renderManage(); });
+  m.querySelectorAll('[data-del]').forEach(b=>b.onclick=()=>{
+    const v = people ? +b.dataset.del : b.dataset.del;
+    if (manage.confirm===String(v)){ runManage(()=>mgDelete(key,v)); }
+    else { manage.confirm = String(v); manage.msg = usage(key,v) ? `${usage(key,v)} carte(s) utilisent cette valeur : elle leur sera retirée. Cliquez à nouveau pour confirmer.` : 'Cliquez à nouveau pour confirmer.'; renderManage(); }
+  });
+}
+async function runManage(fn){
+  try { await fn(); manage.msg = 'Modification enregistrée.'; }
+  catch(e){ manage.msg = 'Impossible : '+((e&&e.message)||e)+' (droit de modifier la structure du document requis).'; }
+  manage.confirm = null;
+  await reloadMeta(); renderManage();
+}
+async function mgAdd(key, v){
+  if (key==='responsables') return createPerson(v);
+  if (meta[key] && meta[key].choices.includes(v)) throw new Error('cette valeur existe déjà');
+  await widgetOptsWrite(key, wo=>wo.choices.push(v));
+}
+function rowsUpdate(key, fn){   // fn(card) -> nouvelle valeur envoyée à Grist, ou undefined si inchangé
+  const ids = [], vals = [];
+  records.forEach(r=>{ const nv = fn(r); if (nv !== undefined){ ids.push(r.id); vals.push(nv); } });
+  return ids.length ? grist.docApi.applyUserActions([['BulkUpdateRecord', host, ids, {[map[key]]: vals}]]) : Promise.resolve();
+}
+async function mgRename(key, oldV, newV){
+  if (key==='responsables'){ await grist.docApi.applyUserActions([['UpdateRecord', teamTable, oldV, {[teamCol]: newV}]]); return; }
+  if (meta[key] && meta[key].choices.includes(newV)) throw new Error('cette valeur existe déjà');
+  await widgetOptsWrite(key, wo=>{
+    wo.choices = wo.choices.map(c=>c===oldV?newV:c);
+    if (wo.choiceOptions && oldV in wo.choiceOptions){ wo.choiceOptions[newV] = wo.choiceOptions[oldV]; delete wo.choiceOptions[oldV]; }
+  });
+  const list = isListCol(key);
+  await rowsUpdate(key, r=>{
+    const cur = L(r,key); if (!cur.includes(oldV)) return undefined;
+    const next = [...new Set(cur.map(x=>x===oldV?newV:x))];
+    return list ? ['L',...next] : newV;
+  });
+  // les couleurs et l'ordre mémorisés suivent la valeur renommée
+  let changed = false;
+  if (colors.tags[oldV]){ colors.tags[newV]=colors.tags[oldV]; delete colors.tags[oldV]; changed = true; }
+  if (colors.groups[oldV]){ colors.groups[newV]=colors.groups[oldV]; delete colors.groups[oldV]; changed = true; }
+  if (changed) saveColors();
+  for (const m in colOrder){ if ((colOrder[m]||[]).includes(oldV)){ colOrder[m] = colOrder[m].map(x=>x===oldV?newV:x); grist.setOption('order', colOrder); } }
+}
+async function mgDelete(key, v){
+  if (key==='responsables'){
+    const list = isListRef();
+    await rowsUpdate('responsables', r=>{ const cur = refIds(r.responsables); if (!cur.includes(v)) return undefined; const next = cur.filter(x=>x!==v); return list ? ['L',...next] : 0; });
+    await grist.docApi.applyUserActions([['RemoveRecord', teamTable, v]]); return;
+  }
+  await widgetOptsWrite(key, wo=>{ wo.choices = wo.choices.filter(c=>c!==v); if (wo.choiceOptions) delete wo.choiceOptions[v]; });
+  const list = isListCol(key);
+  await rowsUpdate(key, r=>{ const cur = L(r,key); if (!cur.includes(v)) return undefined; const next = cur.filter(x=>x!==v); return list ? ['L',...next] : null; });
+}
+
+/* ============ COLONNES DU KANBAN (selon la vue) ============ */
+// Vue Backlog : colonnes = Prio. Vues Suivi et Mes tâches : colonnes = Statut.
+const groupKey = () => mode==='backlog' ? 'prio' : 'statut';
+const groupOf = r => String(g(r, groupKey()) || '');
 function groupList(){
-  const base = mode==='backlog' ? PRIOS : STATUTS;
-  const defaults = mode==='backlog' ? PRIO_COLORS : STATUT_COLORS;
-  const seen = new Set(base);
-  const extra = [...new Set(records.map(r=>r.groupe).filter(v=>v && !seen.has(v)))];
-  const all = [...base,...extra];
+  const k = groupKey(), fld = FIELDS.find(f=>f.key===k);
+  const defaults = k==='prio' ? PRIO_COLORS : STATUT_COLORS;
+  const base = choicesFor(k, fld.fallback).filter((v,i,a)=>true);
+  const declared = (meta[k] && meta[k].choices && meta[k].choices.length) ? meta[k].choices : fld.fallback;
+  const all = base.slice().sort((a,b)=>{ const ia=declared.indexOf(a), ib=declared.indexOf(b); return (ia<0?999:ia)-(ib<0?999:ib); });
   const ord = colOrder[mode] || [];
   const rank = n => { const i = ord.indexOf(n); return i>=0 ? i : 1000 + all.indexOf(n); };
-  return all.map((n,i)=>({name:n, color:colors.groups[n]||defaults[i]||'#999'})).sort((a,b)=>rank(a.name)-rank(b.name));
+  const list = all.map((n,i)=>({name:n, color:colors.groups[n]||defaults[i]||'#999'})).sort((a,b)=>rank(a.name)-rank(b.name));
+  if (records.some(r=>inView(r) && !groupOf(r))) list.push({name:'', label: k==='prio'?'Sans priorité':'Sans statut', color:'#bbb'});
+  return list;
 }
 function moveColumn(from, to){
   if (!from || !to || from===to) return;
-  const names = groupList().map(x=>x.name);
-  const fi = names.indexOf(from); if (fi<0) return;
-  names.splice(fi,1);
-  const ti = names.indexOf(to);
-  names.splice(fi < groupList().map(x=>x.name).indexOf(to) ? ti+1 : ti, 0, from);
+  const before = groupList().map(x=>x.name).filter(Boolean);
+  const names = before.slice(); const fi = names.indexOf(from); if (fi<0) return;
+  names.splice(fi,1); const ti = names.indexOf(to);
+  names.splice(fi < before.indexOf(to) ? ti+1 : ti, 0, from);
   colOrder[mode] = names; grist.setOption('order', colOrder); render();
 }
 
 /* ============ FILTRAGE ============ */
 // Règle Backlog / Suivi : un Statut renseigné = Suivi ; pas de Statut = Backlog
 function inView(r){
-  if (!map.statut) return true;
   const hasStatut = !!g(r,'statut');
   return mode==='backlog' ? !hasStatut : hasStatut;
 }
 function passes(r){
-  const l = k => toList(g(r,k));
   if (!inView(r)) return false;
-  const who = mode==='perso' ? moi : F.personne;       // "Mes tâches" : mes tâches uniquement
-  if (who && !l('personnes').includes(who)) return false;
-  if (F.prio && g(r,'prio') !== F.prio) return false;
-  if (F.charge && g(r,'charge') !== F.charge) return false;
-  if (F.persona && !l('personas').includes(F.persona)) return false;
-  if (F.theme && !l('themes').includes(F.theme)) return false;
-  if (F.produit && !l('produit').includes(F.produit)) return false;
-  if (F.source && !l('sources').includes(F.source)) return false;
-  if (F.etiquette && !l('etiquettes').includes(F.etiquette)) return false;
+  if (mode==='perso' && moi && !L(r,'personnes').includes(moi)) return false;     // "Mes tâches" : mes tâches uniquement
+  for (const f of FILTERS){
+    if (f.skipIn===mode) continue;
+    const sel = F[f.id]; if (!sel.length) continue;
+    const vals = L(r, f.key);
+    if (!sel.some(x=>vals.includes(x))) return false;
+  }
   if (mode!=='backlog' && (F.from||F.to)){
     const d = toDate(g(r,'echeance')); if (!d) return false;
     if (F.from && dayStart(d) < dayStart(F.from)) return false;
     if (F.to && dayStart(d) > dayStart(F.to)) return false;
   }
   if (F.q){
-    const hay = [r.titre,g(r,'description'),...l('personas'),...l('themes'),...l('sources'),...l('produit'),...l('etiquettes'),...l('personnes'),g(r,'checklist')].join(' ').toLowerCase();
+    const hay = [r.titre,g(r,'description'),...L(r,'personas'),...L(r,'themes'),...L(r,'sources'),...L(r,'produit'),...L(r,'etiquettes'),...L(r,'personnes'),g(r,'checklist')].join(' ').toLowerCase();
     if (!hay.includes(F.q.toLowerCase())) return false;
   }
   return true;
 }
-function uniq(key){ return [...new Set(records.flatMap(r=>toList(g(r,key))))].sort((a,b)=>a.localeCompare(b,'fr')); }
-function uniqSingle(key, base=[]){ return [...new Set([...base, ...records.map(r=>g(r,key)).filter(Boolean)])]; }
 
-/* ============ RENDU ============ */
+/* ============ RENDU : barre du haut, bandeaux ============ */
 function renderHeader(){
-  const opt = (arr,val) => `<option value="">— tous —</option>` + arr.map(v=>`<option ${v===val?'selected':''}>${esc(v)}</option>`).join('');
-  const sel = (id,label,arr,val) => map ? `<label>${label}<select id="${id}">${opt(arr,val)}</select></label>` : '';
   const has = k => map && map[k];
-  let h = `<label>Mode <select id="mode">
+  let h = `<label>Vue <select id="mode">
       <option value="suivi" ${mode==='suivi'?'selected':''}>Suivi de projet</option>
       <option value="backlog" ${mode==='backlog'?'selected':''}>Backlog</option>
       <option value="perso" ${mode==='perso'?'selected':''}>Mes tâches</option></select></label>`;
-  if (mode!=='backlog' && has('prio')) h += sel('f-prio','Prio',uniqSingle('prio'),F.prio);
-  if (has('charge')) h += sel('f-charge','Charge',uniqSingle('charge'),F.charge);
-  if (has('personas')) h += sel('f-persona','Persona',uniq('personas'),F.persona);
-  if (has('themes')) h += sel('f-theme','Thème',uniq('themes'),F.theme);
-  if (has('personnes')) h += sel('f-personne', mode==='perso'?'Moi':'Personne', uniq('personnes'), mode==='perso'?moi:F.personne);
-  if (has('produit')) h += sel('f-produit','Produit',uniq('produit'),F.produit);
-  if (has('sources')) h += sel('f-source','Source',uniq('sources'),F.source);
-  if (has('etiquettes')) h += sel('f-etiquette','Étiquette',uniq('etiquettes'),F.etiquette);
-  if (mode!=='backlog' && has('echeance')) h += `<label>Du <input type="date" id="f-from" value="${F.from}"></label><label>au <input type="date" id="f-to" value="${F.to}"></label>`;
+  if (map){
+    if (mode==='perso'){
+      const names = [...new Set([...team.map(t=>t.label), ...records.flatMap(r=>L(r,'personnes'))])].sort((a,b)=>a.localeCompare(b,'fr'));
+      h += `<label>Moi <select id="f-moi"><option value="">— tout le monde —</option>${names.map(n=>`<option ${n===moi?'selected':''}>${esc(n)}</option>`).join('')}</select></label>`;
+    }
+    FILTERS.forEach(f=>{
+      if (f.skipIn===mode) return;
+      if (f.key==='personnes' ? !(map.responsables||map.personnes) : !has(f.key)) return;
+      const n = F[f.id].length;
+      h += `<button class="fb ${n?'active':''}" data-anchor="f-${f.id}" data-fbtn="${f.id}">${f.label}${n?` (${n})`:''} ▾</button>`;
+    });
+    if (mode!=='backlog' && has('echeance')) h += `<label>Du <input type="date" id="f-from" value="${F.from}"></label><label>au <input type="date" id="f-to" value="${F.to}"></label>`;
+  }
   h += `<input type="search" id="f-q" placeholder="Mot clé…" value="${esc(F.q)}">`;
-  h += `<button id="reset">Réinitialiser</button><span class="spacer"></span><button id="diagBtn">🔧 Diagnostic</button><button id="colorsBtn">🎨 Couleurs</button>`;
-  document.getElementById('hdr').innerHTML = h;
+  h += `<button id="reset">Réinitialiser</button><span class="spacer"></span><button id="mgBtn" title="Ajouter, renommer, supprimer des valeurs">✎ Valeurs</button><button id="diagBtn">🔧</button><button id="colorsBtn">🎨 Couleurs</button>`;
+  $('hdr').innerHTML = h;
 
-  const bind = (id,key) => { const e=document.getElementById(id); if(e) e.onchange = ()=>{F[key]=e.value; render();}; };
-  bind('f-prio','prio'); bind('f-charge','charge'); bind('f-persona','persona'); bind('f-theme','theme');
-  bind('f-produit','produit'); bind('f-source','source'); bind('f-etiquette','etiquette'); bind('f-from','from'); bind('f-to','to');
-  const fp = document.getElementById('f-personne');
-  if (fp) fp.onchange = ()=>{ if(mode==='perso'){ moi=fp.value; grist.setOption('moi',moi); } else F.personne=fp.value; render(); };
-  const q=document.getElementById('f-q'); if(q) q.oninput = ()=>{F.q=q.value; renderBoard();};
-  document.getElementById('mode').onchange = e=>{ mode=e.target.value; grist.setOption('mode',mode); render(); };
-  document.getElementById('diagBtn').onclick = ()=>{ diagOpen=!diagOpen; if(diagOpen) loadTableCount(); renderDiag(); };
-  document.getElementById('colorsBtn').onclick = ()=>{ panelOpen=!panelOpen; if(panelOpen) closeFiche(); renderPanel(); };
-  document.getElementById('reset').onclick = ()=>{ Object.keys(F).forEach(k=>F[k]=''); render(); };
+  $('mode').onchange = e=>{ mode=e.target.value; grist.setOption('mode',mode); closeMenu(); render(); };
+  const mo = $('f-moi'); if (mo) mo.onchange = ()=>{ moi = mo.value; grist.setOption('moi',moi); render(); };
+  document.querySelectorAll('[data-fbtn]').forEach(b=>b.onclick=()=>{ const f = FILTERS.find(x=>x.id===b.dataset.fbtn); openMenu('f-'+f.id, filterMenu(f)); });
+  const ff = $('f-from'); if (ff) ff.onchange = ()=>{ F.from=ff.value; render(); };
+  const ft = $('f-to'); if (ft) ft.onchange = ()=>{ F.to=ft.value; render(); };
+  const q=$('f-q'); if(q) q.oninput = ()=>{F.q=q.value; renderBoard();};
+  $('reset').onclick = ()=>{ FILTERS.forEach(f=>F[f.id]=[]); F.from=F.to=F.q=''; render(); };
+  $('mgBtn').onclick = ()=>openManage(FIELDS.find(f=>fieldOn(f) && f.kind!=='date') ? (manageKeys()[0]||{}).key : null);
+  $('diagBtn').onclick = ()=>{ diagOpen=!diagOpen; if(diagOpen) loadTableCount(); renderDiag(); };
+  $('colorsBtn').onclick = ()=>{ panelOpen=!panelOpen; if(panelOpen) closeFiche(); renderPanel(); };
 }
 function renderWarn(){
-  const w = document.getElementById('warn');
   const parts = [];
-  if (map && mode!=='backlog' && map.statut && map.groupe && map.statut!==map.groupe)
-    parts.push(`<div class="warn"><b>Association à corriger</b> : en mode Suivi / Mes tâches, « Colonne du Kanban » (${esc(map.groupe)}) et « Statut » (${esc(map.statut)}) doivent être la <b>même colonne</b> (Statut). Sinon les cartes créées ou déplacées n'ont pas de Statut et sont rangées dans le Backlog.</div>`);
   if (map){
-    const total = records.length, inv = records.filter(inView).length, shown = records.filter(passes).length;
-    let t = `${total} ligne(s) reçue(s) de « ${esc(host||'?')} » · ${shown} affichée(s) dans cette vue`;
-    if (inv<total) t += ` · ${total-inv} dans l'autre vue (${mode==='backlog'?'Suivi':'Backlog'}) à cause du Statut`;
-    if (inv>shown) t += ` · ${inv-shown} masquée(s) par les filtres`;
-    t += `. Colonne du Kanban → <b>${esc(map.groupe||'?')}</b> · Statut → <b>${esc(map.statut||'non associé')}</b>.`;
-    if (!total) t += ` <b>Grist n'envoie aucune ligne</b> : vérifiez qu'aucun filtre n'est actif sur le widget (bouton « Enregistrer » / ↺ en haut à droite de la section).`;
-    parts.push(`<div class="info">${t} <span style="opacity:.6">(widget v${VERSION})</span></div>`);
+    const total = records.length, shown = records.filter(passes).length, inv = records.filter(inView).length;
+    if (!total || !shown){
+      let t = `${total} ligne(s) reçue(s) de « ${esc(host||'?')} » · ${shown} affichée(s) dans cette vue`;
+      if (inv<total) t += ` · ${total-inv} dans l'autre vue (${mode==='backlog'?'Suivi':'Backlog'}) à cause du Statut`;
+      if (inv>shown) t += ` · ${inv-shown} masquée(s) par les filtres`;
+      if (!total) t += ` — <b>Grist n'envoie aucune ligne</b> : vérifiez qu'aucun filtre n'est actif sur le widget (bouton « Enregistrer » / ↺ en haut à droite de la section).`;
+      else t += ` (le Backlog affiche les cartes sans Statut, le Suivi celles qui ont un Statut).`;
+      parts.push(`<div class="info">${t} <span style="opacity:.6">(widget v${VERSION})</span></div>`);
+    }
   }
-  w.innerHTML = parts.join('');
+  $('warn').innerHTML = parts.join('');
 }
+async function loadTableCount(){
+  try { const t = await grist.docApi.fetchTable(host); tableCount = (t.id||[]).length; } catch(e){ tableCount = 'erreur : '+((e&&e.message)||e); }
+  renderDiag();
+}
+function renderDiag(){
+  const d = $('diag');
+  if (!diagOpen){ d.style.display='none'; return; }
+  d.style.display='block';
+  const first = records[0] ? JSON.stringify(records[0]) : '(aucune)';
+  const active = FILTERS.filter(f=>F[f.id].length).map(f=>f.id+'='+F[f.id].join('|')).join(', ') || 'aucun';
+  d.textContent = [
+    'Version du widget : '+VERSION, 'Table du widget : '+host, 'Vue : '+mode+' | filtres : '+active,
+    'onRecords appelé '+nCalls+' fois (dernier : '+(lastCall||'jamais')+')',
+    'Lignes reçues de Grist : '+records.length+' | lignes dans la table (sans filtre) : '+tableCount,
+    'Association des colonnes : '+JSON.stringify(map),
+    'Types des colonnes : '+JSON.stringify(Object.fromEntries(Object.entries(meta).map(([k,v])=>[k,v.type]))),
+    'Métadonnées : '+(metaNote||'(aucune remarque)'),
+    'Commentaires : '+(commentsOk===null?'non chargés':commentsOk?commentsNote:'indisponibles – '+commentsNote),
+    'Cartes affichables dans cette vue : '+(map?records.filter(passes).length:'?'),
+    'Première ligne brute : '+(rawFirst?JSON.stringify(rawFirst):'(aucune)').slice(0,400),
+    'Première ligne convertie : '+first.slice(0,400),
+  ].join('\n');
+}
+function showError(e){
+  const el = $('err'); if (!el) return;
+  const msg = (e && (e.stack || e.message)) || String(e);
+  el.innerHTML = `<div class="err"><b>Erreur dans le widget</b> (copiez ce texte et envoyez-le) :<br><code>${esc(msg).slice(0,700)}</code></div>`;
+}
+window.addEventListener('error', e=>showError(e.error||e.message));
+window.addEventListener('unhandledrejection', e=>showError(e.reason));
+window.addEventListener('dragover', e=>{ if (e.dataTransfer && [...(e.dataTransfer.types||[])].includes('Files')) e.preventDefault(); });
+window.addEventListener('drop', e=>{ if (e.dataTransfer && [...(e.dataTransfer.types||[])].includes('Files')) e.preventDefault(); });
 
+/* ============ RENDU : cartes et colonnes ============ */
 function dateBadge(r){
   const d = toDate(g(r,'echeance')); if(!d) return '';
-  const statut = g(r,'statut') || (mode!=='backlog' ? r.groupe : '');
+  const statut = g(r,'statut') || '';
   let cls = 'd-grey';
   if (STATUT_TERMINE.includes(statut)) cls = 'd-ok';
   else {
@@ -453,103 +821,60 @@ function dateBadge(r){
   return `<span class="date ${cls}">${fmtDate(d)}${cls==='d-ok'?' ✔':''}</span>`;
 }
 function cardHtml(r){
-  const l = k => toList(g(r,k));
   let tags = '';
-  if (mode!=='backlog' && g(r,'prio')) tags += tag(g(r,'prio'),'prio');
-  if (g(r,'charge')) tags += tag(g(r,'charge'));
-  l('etiquettes').forEach(t=>tags+=tagX(t,'etiquettes'));
-  l('personas').forEach(t=>tags+=tagX(t,'personas'));
-  l('produit').forEach(t=>tags+=tagX(t,'produit'));
-  l('themes').forEach(t=>tags+=tagX(t,'themes'));
-  l('sources').forEach(t=>tags+=tagX(t,'sources'));
-  tags += `<span class="addtag" data-addtag="1" title="Ajouter une étiquette">+ étiquette</span>`;
-  let meta_ = dateBadge(r);
+  if (mode!=='backlog' && g(r,'prio')) tags += tagX(g(r,'prio'),'prio');
+  if (g(r,'charge')) tags += tagX(g(r,'charge'),'charge');
+  ['etiquettes','personas','produit','themes','sources'].forEach(k=>L(r,k).forEach(t=>tags+=tagX(t,k)));
+  tags += `<button class="cplus" data-cplus="1" data-anchor="cp-${r.id}" title="Ajouter ou modifier : statut, prio, charge, étiquettes, responsable, échéance…">＋</button>`;
+  let m = dateBadge(r);
   const cl = checklistCount(g(r,'checklist'));
-  if (cl.total) meta_ += `<span>☑ ${cl.done}/${cl.total}</span>`;
-  const pj = refIds(g(r,'pj')).length; if (pj) meta_ += `<span>📎${pj}</span>`;
-  if (mode!=='backlog' && map.commentaires && g(r,'commentaires')) meta_ += `<span>🗨️${g(r,'commentaires')}</span>`;
-  if (mode==='backlog' && map.votes) meta_ += `<button class="vote" data-vote="1">👍 ${g(r,'votes')||0}</button>`;
-  if (mode==='backlog' && map.statut) meta_ += `<button class="tosuivi" data-tosuivi="1" title="Passer dans le suivi (statut A faire)">➜ Suivi</button>`;
-  if (mode!=='backlog' && map.statut && g(r,'statut')==='A faire') meta_ += `<button class="tobacklog" data-tobacklog="1" title="Remettre dans le backlog (statut vidé)">⬅ Backlog</button>`;
-  const av = l('personnes').map(n=>`<div class="av" title="${esc(n)}">${esc(initials(n))}</div>`).join('');
+  if (cl.total) m += `<span>☑ ${cl.done}/${cl.total}</span>`;
+  const pj = refIds(g(r,'pj')).length; if (pj) m += `<span>📎${pj}</span>`;
+  const cc = commentCount(r); if (cc) m += `<span>🗨️${cc}</span>`;
+  if (mode==='backlog' && map.votes) m += `<button class="vote" data-vote="1">👍 ${g(r,'votes')||0}</button>`;
+  if (mode==='backlog') m += `<button class="tosuivi" data-tosuivi="1" title="Passer dans le suivi (statut A faire)">➜ Suivi</button>`;
+  if (mode!=='backlog' && g(r,'statut')==='A faire') m += `<button class="tobacklog" data-tobacklog="1" title="Remettre dans le backlog (statut vidé)">⬅ Backlog</button>`;
+  const av = L(r,'personnes').map(n=>`<div class="av" title="${esc(n)}">${esc(initials(n))}</div>`).join('');
   return `<div class="card${r.id===openId?' open':''}" draggable="true" data-id="${r.id}">
     <div class="tags">${tags}</div>
     <div class="title">${esc(r.titre)||'<i>(sans titre)</i>'}</div>
-    <div class="meta">${meta_}<div class="avatars">${av}</div></div></div>`;
+    <div class="meta">${m}<div class="avatars">${av}</div></div></div>`;
 }
 function renderBoard(){
-  const board = document.getElementById('board');
-  if (!map){ board.innerHTML = '<div class="msg">Associez au minimum les colonnes <b>Titre</b> et <b>Colonne du Kanban</b> dans la configuration du widget.</div>'; return; }
+  const board = $('board');
+  if (!map){ board.innerHTML = '<div class="msg">Associez au minimum les colonnes <b>Titre</b>, <b>Statut</b> et <b>Priorité</b> dans la configuration du widget.</div>'; return; }
+  const left = board.scrollLeft, top = board.scrollTop;
   const shown = records.filter(passes);
   board.innerHTML = groupList().map(gr=>{
-    const cards = shown.filter(r=>(r.groupe||'')===gr.name).sort((a,b)=>{
+    const cards = shown.filter(r=>groupOf(r)===gr.name).sort((a,b)=>{
       const da=toDate(g(a,'echeance')), db=toDate(g(b,'echeance'));
       return (da?+da:9e15)-(db?+db:9e15);
     });
     return `<div class="col" data-group="${esc(gr.name)}">
-      <h2 draggable="true" data-colh="${esc(gr.name)}" title="Glisser pour déplacer la colonne"><span class="grip">⋮⋮</span><span class="dot" style="background:${gr.color}"></span>${esc(gr.name)}<span class="count">${cards.length}</span></h2>
+      <h2 ${gr.name?'draggable="true"':''} data-colh="${esc(gr.name)}" title="Glisser pour déplacer la colonne"><span class="grip">⋮⋮</span><span class="dot" style="background:${gr.color}"></span>${esc(gr.label||gr.name)}<span class="count">${cards.length}</span></h2>
       ${cards.map(cardHtml).join('')}
-      <button class="add" data-add="${esc(gr.name)}">+ Nouvelle carte</button></div>`;
+      ${gr.name?`<button class="add" data-add="${esc(gr.name)}">+ Nouvelle carte</button>`:''}</div>`;
   }).join('');
+  board.scrollLeft = left; board.scrollTop = top;
   wire();
 }
 function render(){
-  try { rebuild(); renderHeader(); renderWarn(); renderBoard(); renderPanel(); renderFiche(); renderDiag(); document.getElementById('err').innerHTML=''; }
+  try { rebuild(); renderHeader(); renderWarn(); renderBoard(); renderPanel(); renderFiche(); renderManage(); renderMenu(); renderDiag(); $('err').innerHTML=''; }
   catch(e){ showError(e); }
 }
 function rebuild(){ index = new Map(records.map(r=>[r.id,r])); }
-function showError(e){
-  const el = document.getElementById('err'); if (!el) return;
-  const msg = (e && (e.stack || e.message)) || String(e);
-  el.innerHTML = `<div class="err"><b>Erreur dans le widget</b> (copiez ce texte et envoyez-le) :<br><code>${esc(msg).slice(0,700)}</code></div>`;
-}
-window.addEventListener('error', e=>showError(e.error||e.message));
-window.addEventListener('unhandledrejection', e=>showError(e.reason));
-// évite que le navigateur ouvre un fichier lâché en dehors de la zone prévue
-window.addEventListener('dragover', e=>{ if (e.dataTransfer && [...(e.dataTransfer.types||[])].includes('Files')) e.preventDefault(); });
-window.addEventListener('drop', e=>{ if (e.dataTransfer && [...(e.dataTransfer.types||[])].includes('Files')) e.preventDefault(); });
-
-/* ---- Diagnostic ---- */
-async function loadTableCount(){
-  try { const t = await grist.docApi.fetchTable(host); tableCount = (t.id||[]).length; } catch(e){ tableCount = 'erreur : '+((e&&e.message)||e); }
-  renderDiag();
-}
-function renderDiag(){
-  const d = document.getElementById('diag');
-  if (!diagOpen){ d.style.display='none'; return; }
-  d.style.display='block';
-  const first = records[0] ? JSON.stringify(records[0]) : '(aucune)';
-  const active = Object.entries(F).filter(([k,v])=>v).map(([k,v])=>k+'='+v).join(', ') || 'aucun';
-  d.textContent = [
-    'Version du widget : '+VERSION,
-    'Table du widget : '+host,
-    'Mode : '+mode+' | filtres du widget : '+active,
-    'onRecords appelé '+nCalls+' fois (dernier : '+(lastCall||'jamais')+')',
-    'Lignes reçues de Grist : '+records.length,
-    'Lignes dans la table (tous filtres ignorés) : '+tableCount,
-    'Association des colonnes : '+JSON.stringify(map),
-    'Types des colonnes : '+JSON.stringify(Object.fromEntries(Object.entries(meta).map(([k,v])=>[k,v.type]))),
-    'Métadonnées : '+(metaNote||'(aucune remarque)'),
-    'Cartes affichables dans cette vue : '+(map?records.filter(passes).length:'?'),
-    'Première ligne reçue (brute) : '+(rawFirst?JSON.stringify(rawFirst):'(aucune)').slice(0,500),
-    'Première ligne après conversion : '+first.slice(0,500),
-  ].join('\n');
-}
 
 /* ---- Panneau de personnalisation des couleurs ---- */
 function saveColors(){ grist.setOption('colors', colors); }
 function renderPanel(){
-  const p = document.getElementById('panel');
+  const p = $('panel');
   if (!panelOpen || !map){ p.style.display='none'; return; }
   p.style.display = 'block';
-  const groups = groupList();
-  const tagVals = [...new Set([
-    ...records.map(r=>g(r,'prio')), ...records.map(r=>g(r,'charge')),
-    ...TAG_CATS.map(([k])=>k).flatMap(k=>records.flatMap(r=>toList(g(r,k))))
-  ].filter(Boolean))].sort((a,b)=>a.localeCompare(b,'fr'));
+  const groups = groupList().filter(x=>x.name);
+  const tagVals = [...new Set(FIELDS.filter(f=>f.kind!=='date'&&f.key!=='responsables'&&f.key!=='statut').flatMap(f=>records.flatMap(r=>L(r,f.key))))].sort((a,b)=>a.localeCompare(b,'fr'));
   p.innerHTML = `<button class="close" id="pclose">×</button><b>Personnalisation</b>
-    <h3>Colonnes du Kanban</h3>
-    <div class="hint" style="font-size:11px;color:#666">Pour changer l'ordre, faites glisser le titre d'une colonne.</div>
+    <h3>Colonnes de la vue « ${mode==='backlog'?'Backlog':'Suivi'} »</h3>
+    <div style="font-size:11px;color:#666">Pour changer l'ordre, faites glisser le titre d'une colonne.</div>
     ${groups.map(gr=>`<div class="row"><input type="color" data-grp="${esc(gr.name)}" value="${gr.color.length===7?gr.color:'#999999'}"> ${esc(gr.name)}</div>`).join('')}
     <div class="row"><button id="oreset">Rétablir l'ordre d'origine</button></div>
     <h3>Étiquettes (couleur de base : le fond est éclairci automatiquement)</h3>
@@ -558,99 +883,65 @@ function renderPanel(){
     <div class="row">Orange à <input type="number" id="t-orange" min="0" value="${thr.orange}"> jour(s) ou moins</div>
     <div class="row">Rouge à <input type="number" id="t-red" min="0" value="${thr.red}"> jour(s) ou moins</div>
     <div class="row"><button id="creset">Rétablir les couleurs par défaut</button></div>`;
-  document.getElementById('pclose').onclick = ()=>{ panelOpen=false; renderPanel(); };
-  p.querySelectorAll('[data-grp]').forEach(i=>{
-    i.oninput = ()=>{ colors.groups[i.dataset.grp]=i.value; renderBoard(); };
-    i.onchange = ()=>{ saveColors(); };
-  });
-  p.querySelectorAll('[data-tag]').forEach(i=>{
-    i.oninput = ()=>{ colors.tags[i.dataset.tag]=i.value; renderBoard(); };
-    i.onchange = ()=>{ saveColors(); renderPanel(); };
-  });
-  document.getElementById('oreset').onclick = ()=>{ delete colOrder[mode]; grist.setOption('order', colOrder); render(); };
-  document.getElementById('t-orange').onchange = e=>{ thr.orange=+e.target.value; grist.setOption('orange',thr.orange); renderBoard(); };
-  document.getElementById('t-red').onchange = e=>{ thr.red=+e.target.value; grist.setOption('red',thr.red); renderBoard(); };
-  document.getElementById('creset').onclick = ()=>{ colors={groups:{},tags:{}}; saveColors(); render(); };
+  $('pclose').onclick = ()=>{ panelOpen=false; renderPanel(); };
+  p.querySelectorAll('[data-grp]').forEach(i=>{ i.oninput = ()=>{ colors.groups[i.dataset.grp]=i.value; renderBoard(); }; i.onchange = ()=>saveColors(); });
+  p.querySelectorAll('[data-tag]').forEach(i=>{ i.oninput = ()=>{ colors.tags[i.dataset.tag]=i.value; renderBoard(); }; i.onchange = ()=>{ saveColors(); renderPanel(); }; });
+  $('oreset').onclick = ()=>{ delete colOrder[mode]; grist.setOption('order', colOrder); render(); };
+  $('t-orange').onchange = e=>{ thr.orange=+e.target.value; grist.setOption('orange',thr.orange); renderBoard(); };
+  $('t-red').onchange = e=>{ thr.red=+e.target.value; grist.setOption('red',thr.red); renderBoard(); };
+  $('creset').onclick = ()=>{ colors={groups:{},tags:{}}; saveColors(); render(); };
 }
 
-/* ============ ÉTIQUETTES ============ */
-function isListCol(key){
-  if (meta[key] && meta[key].type) return /^ChoiceList/.test(meta[key].type);
-  const vals = records.map(r=>g(r,key)).filter(v=>v!=null && v!=='');
-  return vals.length===0 || vals.some(v=>Array.isArray(v));
-}
-function writeTags(card, key, list){
-  if (isListCol(key)) return update(card, {[key]: list}, {[key]: ['L',...list]});
-  return update(card, {[key]: list[0] ?? null});      // colonne "Choix" simple : une seule valeur
-}
-function addTag(card, key, value){
-  value = String(value||'').trim(); if (!value) return;
-  const cur = toList(g(card,key));
-  if (cur.includes(value)) return;
-  return writeTags(card, key, isListCol(key) ? [...cur,value] : [value]);
-}
-function removeTag(card, key, value){
-  return writeTags(card, key, toList(g(card,key)).filter(v=>v!==value));
-}
-
-/* ============ POPUPS (+ étiquette sur la carte, nouvelle carte) ============ */
-function closePop(){ document.getElementById('pop').style.display='none'; }
-function openPop(html){ const p=document.getElementById('pop'); p.innerHTML=html; p.style.display='block'; return p; }
-function openTagPop(card){
-  const cats = TAG_CATS.filter(([k])=>map[k]);
-  openPop(`<b>Ajouter une étiquette</b>
-    <div class="row"><select id="pc">${cats.map(([k,n])=>`<option value="${k}">${n}</option>`).join('')}</select></div>
-    <div class="row"><select id="pv"></select></div>
-    <div class="row" id="pnew" style="display:none"><input id="pn" placeholder="Nouveau nom…" autocomplete="off"></div>
-    <div class="row" style="justify-content:flex-end"><button id="pcancel">Annuler</button><button class="primary" id="pok">Ajouter</button></div>`);
-  const fill = ()=>{
-    const k = document.getElementById('pc').value;
-    const cur = toList(g(card,k));
-    document.getElementById('pv').innerHTML = choicesFor(k).filter(v=>!cur.includes(v)).map(v=>`<option>${esc(v)}</option>`).join('') + '<option value="__new">➕ Nouvelle valeur…</option>';
-    document.getElementById('pnew').style.display = 'none';
-  };
-  document.getElementById('pc').onchange = fill; fill();
-  document.getElementById('pv').onchange = e=>{ const n=document.getElementById('pnew'); n.style.display = e.target.value==='__new' ? 'flex' : 'none'; if(e.target.value==='__new') document.getElementById('pn').focus(); };
-  const ok = ()=>{
-    const k=document.getElementById('pc').value; let v=document.getElementById('pv').value;
-    if (v==='__new') v = document.getElementById('pn').value;
-    closePop(); addTag(card,k,v);
-  };
-  document.getElementById('pok').onclick = ok;
-  document.getElementById('pcancel').onclick = closePop;
-  document.getElementById('pn').onkeydown = e=>{ if(e.key==='Enter') ok(); if(e.key==='Escape') closePop(); };
-}
+/* ============ NOUVELLE CARTE ============ */
+function closePop(){ $('pop').style.display='none'; }
 function openNewPop(group){
-  openPop(`<b>Nouvelle carte</b> <span class="hint">(${esc(group)})</span>
+  const p = $('pop'); p.style.display='block';
+  p.innerHTML = `<b>Nouvelle carte</b> <span class="hint">(${esc(group)})</span>
     <div class="row"><input id="nt" placeholder="Titre de la tâche…" autocomplete="off"></div>
-    <div class="row" style="justify-content:flex-end"><button id="ncancel">Annuler</button><button class="primary" id="nok">Créer</button></div>`);
+    <div class="row" style="justify-content:flex-end"><button id="ncancel">Annuler</button><button class="primary" id="nok">Créer</button></div>`;
   const ok = ()=>{
-    const t = document.getElementById('nt').value.trim();
+    const t = $('nt').value.trim();
     if (!t) return; closePop();
-    act([['AddRecord', host, null, {[map.titre]: t, [map.groupe]: group}]]);
+    act([['AddRecord', host, null, {[map.titre]: t, [map[groupKey()]]: group}]]);   // Suivi : colonne = Statut ; Backlog : colonne = Prio
   };
-  document.getElementById('nok').onclick = ok;
-  document.getElementById('ncancel').onclick = closePop;
-  document.getElementById('nt').onkeydown = e=>{ if(e.key==='Enter') ok(); if(e.key==='Escape') closePop(); };
-  document.getElementById('nt').focus();
+  $('nok').onclick = ok; $('ncancel').onclick = closePop;
+  $('nt').onkeydown = e=>{ if(e.key==='Enter') ok(); if(e.key==='Escape') closePop(); };
+  $('nt').focus();
 }
 
 /* ============ PIÈCES JOINTES ============ */
+async function postAttachments(tok, files){
+  const attempts = [];
+  const bases = [tok.baseUrl];
+  if (/^http:\/\//i.test(tok.baseUrl)) bases.push(tok.baseUrl.replace(/^http:/i,'https:'));      // adresse annoncée en http alors que la page est en https
+  for (const base of bases){
+    for (const mode_ of ['query','header']){
+      try {
+        const fd = new FormData(); files.forEach(f=>fd.append('upload', f, f.name));
+        const url = mode_==='query' ? `${base}/attachments?auth=${encodeURIComponent(tok.token)}` : `${base}/attachments`;
+        const res = await fetch(url, {method:'POST', body:fd, headers: mode_==='header' ? {Authorization:'Bearer '+tok.token} : undefined});
+        if (res.ok) return await res.json();
+        attempts.push(`${mode_} : code ${res.status}`);
+      } catch(e){ attempts.push(`${mode_} : ${(e&&e.message)||e}`); }
+    }
+  }
+  let host_ = ''; try { host_ = new URL(tok.baseUrl).host; } catch(e){}
+  throw new Error('le navigateur ne peut pas joindre le serveur Grist ('+(host_||'?')+') depuis ce widget ['+attempts.join(' ; ')+']');
+}
 async function uploadFiles(card, files){
   files = [...files]; if (!files.length) return;
-  uploading = true; ficheSig=''; renderFiche();
+  uploading = true; refreshFiche();
   try {
     const tok = await grist.docApi.getAccessToken({readOnly:false});
-    const fd = new FormData(); files.forEach(f=>fd.append('upload', f, f.name));
-    const res = await fetch(`${tok.baseUrl}/attachments?auth=${encodeURIComponent(tok.token)}`, {method:'POST', body:fd});
-    if (!res.ok) throw new Error('envoi refusé (code '+res.status+')');
-    const ids = (await res.json()).filter(x=>typeof x==='number');
-    const cur = refIds(g(card,'pj'));
+    const ids = (await postAttachments(tok, files)).filter(x=>typeof x==='number');
+    const fresh = index.get(card.id) || card;
+    const all = [...new Set([...refIds(g(fresh,'pj')), ...ids])];
     await loadAttachMeta();
-    const all = [...new Set([...cur,...ids])];
-    await update(card, {pj:all}, {pj:['L',...all]});
-  } catch(e){ alert("Envoi de la pièce jointe impossible : "+((e&&e.message)||e)); }
-  uploading = false; ficheSig=''; renderFiche();
+    await update(fresh, {pj:all}, {pj:['L',...all]});
+  } catch(e){
+    alert("Envoi de la pièce jointe impossible : "+((e&&e.message)||e)+"\n\nEn attendant, ajoutez le fichier directement dans la cellule « PJ » de la table (glisser-déposer dans Grist) : il s'affichera ensuite dans la fiche.");
+  }
+  uploading = false; refreshFiche();
 }
 async function downloadAttachment(id){
   try {
@@ -661,21 +952,59 @@ async function downloadAttachment(id){
   } catch(e){ alert("Ouverture impossible : "+((e&&e.message)||e)); }
 }
 
-/* ============ FICHE DE LA CARTE ============ */
+/* ============ FICHE DE LA CARTE (version compacte) ============ */
 function openFiche(id){ openId = id; panelOpen = false; ficheSig = ''; if (map && map.pj) loadAttachMeta(); render(); }
-function closeFiche(){ if (openId===null) return; openId = null; ficheSig = ''; document.getElementById('fiche').style.display='none'; renderBoard(); }
+function closeFiche(){ if (openId===null) return; openId = null; ficheSig = ''; $('fiche').style.display='none'; closeMenu(); renderBoard(); }
+function refreshFiche(){ ficheSig=''; renderFiche(); renderMenu(); }
 function sigOf(r){
-  return JSON.stringify([metaTick, uploading, r.titre, r.groupe, g(r,'statut'), g(r,'prio'), g(r,'charge'), g(r,'description'), g(r,'checklist'), g(r,'echeance'), g(r,'responsables'), g(r,'pj'),
-    ...TAG_CATS.map(([k])=>toList(g(r,k)))]);
+  return JSON.stringify([metaTick, commentsTick, uploading, r.titre, g(r,'statut'), g(r,'prio'), g(r,'charge'), g(r,'description'), g(r,'checklist'), g(r,'echeance'), g(r,'responsables'), g(r,'personnes'), g(r,'pj'), g(r,'votes'),
+    ...FIELDS.filter(f=>f.kind==='tags').map(f=>L(r,f.key))]);
 }
-function pillsHtml(key, values, current){
-  return `<div class="pills">${values.map(v=>{
-    const on = v===current, c = tagColors(v, key==='prio'?'prio':'');
-    return `<button class="pill" data-pill="${key}" data-val="${esc(v)}" style="${on?`background:${c[0]};color:${c[1]};border-color:${c[1]}`:''}">${esc(v)}</button>`;
-  }).join('')}</div>`;
+function summaryHtml(r){
+  const sg = (lbl, inner) => `<div class="sg"><div class="lbl">${lbl}</div><div class="vals">${inner}</div></div>`;
+  let h = '';
+  FIELDS.forEach(f=>{
+    if (!fieldOn(f)) return;
+    if (f.key==='statut' || f.key==='prio' || f.key==='charge'){
+      const v = g(r,f.key); if (v) h += sg(f.label, tagX(v, f.key));
+    } else if (f.kind==='tags'){
+      const l = L(r,f.key); if (l.length) h += sg(f.label, l.map(t=>tagX(t,f.key)).join(''));
+    } else if (f.key==='responsables'){
+      const ids = refIds(r.responsables), names = map.responsables ? ids.map(id=>[id, teamById[id]||('#'+id)]) : L(r,'personnes').map(n=>[null,n]);
+      if (names.length) h += sg('Responsables', names.map(([id,n])=>`<span class="chip"><span class="av">${esc(initials(n))}</span>${esc(n)}${id!=null?`<span class="x" data-rmresp="${id}" title="Retirer">×</span>`:''}</span>`).join(''));
+    } else if (f.key==='echeance'){
+      const d = toDate(g(r,'echeance')); if (d) h += sg('Échéance', dateBadge(r) + `<span class="none">${esc(d.toLocaleDateString('fr-FR'))}</span>`);
+    }
+  });
+  return h || '<span class="none">Aucune valeur : utilisez les boutons ci-dessus.</span>';
+}
+function commentsHtml(r){
+  if (commentsOk === false) return `<div class="none">La table « ${COMMENTS.table} » n'est pas utilisable (${esc(commentsNote)}). Voir le guide pour la créer.</div>`;
+  if (commentsOk === null) return '<div class="none">Chargement…</div>';
+  const list = commentsOf(r.id).sort((a,b)=>(a.date?+a.date:a.id)-(b.date?+b.date:b.id));
+  const kids = pid => list.filter(c=>(c.parent||0)===pid);
+  const one = (c, depth)=>`<div class="cm"><div class="av" title="${esc(c.author)}">${esc(initials(c.author||'?'))}</div><div class="cb">
+      <div class="ch"><b>${esc(c.author||'Anonyme')}</b> · ${c.date?esc(fmtDateTime(c.date)):''}</div>
+      <div class="ct">${mentionHtml(c.text)}</div>
+      <div class="ca"><button data-reply="${c.id}">Répondre</button><button data-delc="${c.id}">Supprimer</button></div>
+      <div id="rp-${c.id}" style="display:none"><textarea class="cmt" data-draft="reply-${c.id}" placeholder="Votre réponse… (@ pour citer quelqu'un)">${esc(drafts['reply-'+c.id]||'')}</textarea>
+        <div class="row"><button class="btn ghost" data-at="reply-${c.id}" data-anchor="at-reply-${c.id}">@</button><button class="btn" data-send="${c.id}">Répondre</button></div></div>
+      <div class="rep">${kids(c.id).map(k=>one(k,depth+1)).join('')}</div></div></div>`;
+  const top = kids(0).concat(list.filter(c=>c.parent && !list.some(p=>p.id===c.parent)));   // réponses orphelines affichées en haut
+  return `${top.map(c=>one(c,0)).join('') || '<div class="none">Aucun commentaire.</div>'}
+    <div style="margin-top:12px"><textarea class="cmt" data-draft="new" placeholder="Écrire un commentaire… (@ pour citer quelqu'un)">${esc(drafts['new']||'')}</textarea>
+      <div class="row"><button class="btn ghost" data-at="new" data-anchor="at-new">@ Citer</button><span class="grow"></span><button class="btn" id="cm-send">Publier</button></div></div>`;
+}
+function atMenu(draftKey){
+  return ()=>({ html: '<div class="mh">Citer une personne</div>' + (team.map(t=>`<div class="mi" data-at-p="${esc(t.label)}">@${esc(t.label)}</div>`).join('') || '<div class="mh" style="text-transform:none">Liste des personnes indisponible</div>'),
+    bind: el=>el.querySelectorAll('[data-at-p]').forEach(x=>x.onclick=()=>{
+      const ta = document.querySelector(`[data-draft="${draftKey}"]`); if (!ta) return;
+      const pos = ta.selectionStart ?? ta.value.length, ins = '@'+x.dataset.atP+' ';
+      ta.value = ta.value.slice(0,pos)+ins+ta.value.slice(pos); drafts[draftKey] = ta.value; closeMenu(); ta.focus(); ta.selectionStart = ta.selectionEnd = pos+ins.length;
+    }) });
 }
 function renderFiche(){
-  const f = document.getElementById('fiche');
+  const f = $('fiche');
   const r = openId!==null ? index.get(openId) : null;
   if (!r || !map){ f.style.display='none'; if (openId!==null && !r) openId=null; return; }
   f.style.display = 'block';
@@ -683,59 +1012,15 @@ function renderFiche(){
   if (sig===ficheSig && f.innerHTML) return;            // rien n'a changé : on ne touche pas à la saisie en cours
   ficheSig = sig;
   const keepScroll = f.scrollTop;
+  const id = r.id, cur = ()=>index.get(id);             // toujours la version la plus récente de la carte
 
-  /* en-tête : statut */
-  let statut = '';
-  if (map.statut){
-    const vals = choicesFor('statut', STATUTS);
-    statut = `<select class="stsel" id="fp-statut"><option value="">Backlog (sans statut)</option>${vals.map(v=>`<option ${v===g(r,'statut')?'selected':''}>${esc(v)}</option>`).join('')}</select>`;
-  } else statut = `<span class="stsel">${esc(r.groupe||'—')}</span>`;
+  const dd = FIELDS.filter(fieldOn).map(fl=>`<button class="dd" data-anchor="fd-${fl.key}" data-dd="${fl.key}">${fl.label} ▾</button>`).join('');
+  const vote = map.votes ? `<button class="dd vote2" id="fp-vote">👍 ${g(r,'votes')||0}</button>` : '';
 
-  /* priorité / charge en pastilles */
-  let chips = '';
-  if (map.prio) chips += `<div class="sec"><div class="lbl">Priorité</div>${pillsHtml('prio', choicesFor('prio',PRIOS), g(r,'prio'))}</div>`;
-  if (map.charge) chips += `<div class="sec"><div class="lbl">Charge de travail</div>${pillsHtml('charge', choicesFor('charge',CHARGES), g(r,'charge'))}</div>`;
+  const desc = map.description ? `<div class="sec"><div class="sh">📝 Description</div><textarea class="desc" id="fp-desc" placeholder="Ajouter une description plus détaillée…">${esc(g(r,'description')||'')}</textarea></div>` : '';
 
-  /* responsables */
-  let resp;
-  if (map.responsables){
-    const ids = refIds(r.responsables);
-    const avail = team.filter(t=>!ids.includes(t.id));
-    resp = `<div class="chips">${ids.map(id=>`<span class="chip"><span class="av">${esc(initials(teamById[id]||'?'))}</span>${esc(teamById[id]||('#'+id))}<span class="x" data-rmresp="${id}" title="Retirer">×</span></span>`).join('') || '<span class="none">personne</span>'}</div>
-      ${team.length ? `<select id="fp-resp" style="width:100%"><option value="">+ Ajouter un responsable…</option>${avail.map(t=>`<option value="${t.id}">${esc(t.label)}</option>`).join('')}</select>` : `<div class="none">Liste des personnes indisponible (${esc(metaNote||'chargement…')}).</div>`}`;
-  } else if (map.personnes){
-    resp = `<div class="chips">${toList(r.personnes).map(n=>`<span class="chip"><span class="av">${esc(initials(n))}</span>${esc(n)}</span>`).join('') || '<span class="none">personne</span>'}</div>
-      <div class="none">Pour modifier : associez votre colonne de <b>référence</b> au champ « Responsables (colonne de RÉFÉRENCE) » du widget.</div>`;
-  } else resp = '<div class="none">Champ « Responsables » non associé.</div>';
-
-  /* échéance */
-  let ech = '';
-  if (map.echeance){
-    const d = toDate(g(r,'echeance'));
-    const editable = meta.echeance && meta.echeance.type==='Date';
-    ech = `<div><div class="sh"><span class="ic">📅</span>Échéance</div>
-      ${editable ? `<div class="row"><input type="date" id="fp-date" value="${d?d.toISOString().slice(0,10):''}"> ${d?`<button class="btn soft" id="fp-dateclr" title="Effacer">×</button>`:''}</div>`
-                 : `<div class="row">${d?esc(d.toLocaleString('fr-FR')):'<span class="none">aucune</span>'}</div><div class="none">Modification possible si la colonne est de type « Date » (pas « Date et heure »).</div>`}
-      <div class="row">${dateBadge(r)}</div></div>`;
-  }
-
-  /* étiquettes : une liste déroulante par catégorie */
-  const cats = TAG_CATS.filter(([k])=>map[k]).map(([k,n])=>{
-    const cur = toList(g(r,k));
-    const options = choicesFor(k).filter(v=>!cur.includes(v));
-    return `<div class="cat"><div class="lbl">${n}</div>
-      <div class="ftags">${cur.map(t=>tagX(t,k)).join('') || '<span class="none">aucune</span>'}</div>
-      <div class="row"><select class="grow" data-addsel="${k}"><option value="">+ Ajouter…</option>${options.map(v=>`<option>${esc(v)}</option>`).join('')}<option value="__new">➕ Nouvelle valeur…</option></select></div>
-      <div class="row" id="nr-${k}" style="display:none"><input type="text" class="grow" id="ta-${k}" placeholder="Nouvelle valeur…" autocomplete="off"><button class="btn" data-fadd="${k}">Ajouter</button></div>
-    </div>`;
-  }).join('');
-
-  /* description */
-  const desc = map.description ? `<div class="sec"><div class="sh"><span class="ic">📝</span>Description</div>
-    <textarea id="fp-desc" placeholder="Ajouter une description plus détaillée…">${esc(g(r,'description')||'')}</textarea></div>` : '';
-
-  /* checklist */
-  let checklist = '';
+  let checklist;
+  const clCount = map.checklist ? checklistCount(g(r,'checklist')) : {done:0,total:0};
   if (!map.checklist) checklist = `<div class="none">Associez une colonne <b>Texte</b> au champ « Checklist » du widget pour activer la checklist.</div>`;
   else {
     const {items} = parseChecklist(g(r,'checklist'));
@@ -745,91 +1030,74 @@ function renderFiche(){
         <input type="text" data-cl-text="${x.i}" value="${esc(x.text)}"><button class="del" data-cl-del="${x.i}" title="Supprimer ce point">×</button></div>`).join('')}
       <div class="row"><input type="text" class="grow" id="cl-add" placeholder="Ajouter une tâche…" autocomplete="off"><button class="btn soft" id="cl-addbtn">+ Ajouter</button></div>`;
   }
-  const clCount = map.checklist ? checklistCount(g(r,'checklist')) : {done:0,total:0};
 
-  /* pièces jointes */
   let pj = '';
   if (map.pj){
     const ids = refIds(g(r,'pj'));
-    pj = `<div class="sec"><div class="sh"><span class="ic">📎</span>Pièces jointes<span class="sub">${ids.length||''}</span></div>
-      ${ids.map(id=>`<div class="att"><span>📄</span><a data-dl="${id}" title="Ouvrir">${esc((attMeta[id]&&attMeta[id].name)||('Fichier '+id))}</a><span class="sz">${fmtSize(attMeta[id]&&attMeta[id].size)}</span><button class="del" data-rmatt="${id}" title="Retirer de la carte">×</button></div>`).join('')}
+    pj = `<div class="sec"><div class="sh">📎 Pièces jointes<span class="sub">${ids.length||''}</span></div>
+      ${ids.map(i=>`<div class="att"><span>📄</span><a data-dl="${i}" title="Ouvrir">${esc((attMeta[i]&&attMeta[i].name)||('Fichier '+i))}</a><span class="sz">${fmtSize(attMeta[i]&&attMeta[i].size)}</span><button class="del" data-rmatt="${i}" title="Retirer de la carte">×</button></div>`).join('')}
       <div class="drop" id="fp-drop">${uploading?'Envoi en cours…':'<b>Glisser-déposer</b> un fichier ici<br>ou <b>cliquer pour le choisir</b>'}</div>
       <input type="file" id="fp-file" multiple style="display:none"></div>`;
   }
 
-  f.innerHTML = `<div class="fhead">${statut}<span class="fsp"></span><button class="close" id="fclose" title="Fermer (Échap)">×</button></div>
+  f.innerHTML = `<div class="fhead"><input type="text" class="ftitle" id="f-title" value="${esc(r.titre)}" placeholder="Titre de la tâche"><button class="close" id="fclose" title="Fermer (Échap)">×</button></div>
     <div class="fbody">
-      <input type="text" class="ftitle" id="f-title" value="${esc(r.titre)}" placeholder="Titre de la tâche">
-      ${chips}
-      <div class="sec grid2"><div><div class="sh"><span class="ic">👤</span>Responsables</div>${resp}</div>${ech}</div>
-      <div class="sec"><div class="sh"><span class="ic">🏷</span>Étiquettes</div>${cats || '<div class="none">Associez au moins une colonne Étiquettes, Personas, Thèmes, Produit ou Sources.</div>'}</div>
+      <div class="tb">${dd}${vote}</div>
+      <div class="summ">${summaryHtml(r)}</div>
       ${desc}
-      <div class="sec"><div class="sh"><span class="ic">☑</span>Tâches${clCount.total?`<span class="sub">${clCount.done}/${clCount.total}</span>`:''}</div>${checklist}</div>
+      <div class="sec"><div class="sh">☑ Checklist${clCount.total?`<span class="sub">${clCount.done}/${clCount.total}</span>`:''}</div>${checklist}</div>
       ${pj}
+      <div class="sec"><div class="sh">🗨️ Commentaires<span class="sub">${commentsOk?commentsOf(id).length:''}</span></div>${commentsHtml(r)}</div>
     </div>`;
   f.scrollTop = keepScroll;
 
   /* --- branchements --- */
-  document.getElementById('fclose').onclick = closeFiche;
-  document.getElementById('f-title').onchange = e=>{ const v=e.target.value.trim(); if (v!==r.titre) update(r,{titre:v}); };
-  const st = document.getElementById('fp-statut');
-  if (st) st.onchange = ()=>{ const v = st.value || null; update(r, map.groupe===map.statut ? {statut:v, groupe:v} : {statut:v}); };
-  f.querySelectorAll('[data-pill]').forEach(b=>b.onclick=()=>{ const k=b.dataset.pill; update(r,{[k]: g(r,k)===b.dataset.val ? null : b.dataset.val}); });
-  const rs = document.getElementById('fp-resp');
-  const isRefList = ()=> meta.responsables && /^RefList/.test(meta.responsables.type);
-  const setResp = ids => update(r, {responsables: isRefList()? ids : (ids[0]||0)}, {responsables: isRefList()? ['L',...ids] : (ids[0]||0)});
-  if (rs) rs.onchange = ()=>{ if(!rs.value) return; const ids = isRefList() ? [...refIds(r.responsables), +rs.value] : [+rs.value]; setResp(ids); };
-  f.querySelectorAll('[data-rmresp]').forEach(x=>x.onclick=()=>setResp(refIds(r.responsables).filter(i=>i!==+x.dataset.rmresp)));
-  const dt = document.getElementById('fp-date');
-  if (dt) dt.onchange = ()=>{ const v=dt.value; update(r, {echeance: v ? Date.UTC(+v.slice(0,4), +v.slice(5,7)-1, +v.slice(8,10))/1000 : null}); };
-  const dc = document.getElementById('fp-dateclr'); if (dc) dc.onclick = ()=>update(r,{echeance:null});
-
-  f.querySelectorAll('[data-rm]').forEach(x=>x.onclick=()=>removeTag(r, x.dataset.rm, x.dataset.val));
-  f.querySelectorAll('[data-addsel]').forEach(s=>s.onchange=()=>{
-    const k = s.dataset.addsel;
-    if (s.value==='__new'){ document.getElementById('nr-'+k).style.display='flex'; document.getElementById('ta-'+k).focus(); s.value=''; return; }
-    if (s.value) addTag(r,k,s.value);
-  });
-  const commitTag = k=>{ const inp=document.getElementById('ta-'+k); if(!inp.value.trim()) return; addTag(r,k,inp.value); };
-  f.querySelectorAll('[data-fadd]').forEach(b=>b.onclick=()=>commitTag(b.dataset.fadd));
-  TAG_CATS.forEach(([k])=>{ const inp=document.getElementById('ta-'+k); if(inp) inp.onkeydown=e=>{ if(e.key==='Enter'){ e.preventDefault(); commitTag(k); } }; });
-
-  const ds = document.getElementById('fp-desc');
-  if (ds) ds.onchange = ()=>update(r,{description: ds.value});
+  $('fclose').onclick = closeFiche;
+  $('f-title').onchange = e=>{ const v=e.target.value.trim(), c=cur(); if (c && v!==c.titre) update(c,{titre:v}); };
+  f.querySelectorAll('[data-dd]').forEach(b=>b.onclick=()=>openMenu('fd-'+b.dataset.dd, fieldMenu(id, b.dataset.dd)));
+  const vt = $('fp-vote'); if (vt) vt.onclick = ()=>{ const c=cur(); if (c) update(c,{votes:(Number(g(c,'votes'))||0)+1}); };
+  f.querySelectorAll('[data-rm]').forEach(x=>x.onclick=()=>{ const c=cur(); if (c) removeValue(c, x.dataset.rm, x.dataset.val); });
+  f.querySelectorAll('[data-rmresp]').forEach(x=>x.onclick=()=>{ const c=cur(); if (c) setField(c,'responsables',+x.dataset.rmresp); });
+  const ds = $('fp-desc'); if (ds) ds.onchange = ()=>{ const c=cur(); if (c) update(c,{description: ds.value}); };
 
   if (map.checklist){
-    const edit = fn => { const {lines} = parseChecklist(g(r,'checklist')); fn(lines); update(r,{checklist: lines.join('\n')}); };
-    f.querySelectorAll('[data-cl-toggle]').forEach(c=>c.onchange=()=>edit(lines=>{
-      const i=+c.dataset.clToggle; lines[i] = lines[i].replace(/\[( |x|X)\]/, c.checked?'[x]':'[ ]');
-    }));
+    const edit = fn => { const c=cur(); if(!c) return; const {lines} = parseChecklist(g(c,'checklist')); fn(lines); update(c,{checklist: lines.join('\n')}); };
+    f.querySelectorAll('[data-cl-toggle]').forEach(c=>c.onchange=()=>edit(lines=>{ const i=+c.dataset.clToggle; lines[i] = lines[i].replace(/\[( |x|X)\]/, c.checked?'[x]':'[ ]'); }));
     f.querySelectorAll('[data-cl-text]').forEach(t=>t.onchange=()=>edit(lines=>{
       const i=+t.dataset.clText, v=t.value.trim();
       if (!v) lines.splice(i,1); else lines[i] = lines[i].replace(CL_RE, (m,pre,x)=>`${pre}[${x}] ${v}`);
     }));
     f.querySelectorAll('[data-cl-del]').forEach(b=>b.onclick=()=>edit(lines=>lines.splice(+b.dataset.clDel,1)));
     const addItem = ()=>{
-      const inp=document.getElementById('cl-add'); const v=inp.value.trim(); if(!v) return;
-      focusAfter='cl-add';
+      const v=$('cl-add').value.trim(); if(!v) return;
       edit(lines=>{ while(lines.length && lines[lines.length-1].trim()==='') lines.pop(); lines.push('- [ ] '+v); });
+      setTimeout(()=>{ const e=$('cl-add'); if(e) e.focus(); }, 0);
     };
-    document.getElementById('cl-addbtn').onclick = addItem;
-    document.getElementById('cl-add').onkeydown = e=>{ if(e.key==='Enter'){ e.preventDefault(); addItem(); } };
+    $('cl-addbtn').onclick = addItem;
+    $('cl-add').onkeydown = e=>{ if(e.key==='Enter'){ e.preventDefault(); addItem(); } };
   }
 
   if (map.pj){
-    const drop = document.getElementById('fp-drop'), file = document.getElementById('fp-file');
+    const drop = $('fp-drop'), file = $('fp-file');
     drop.onclick = ()=>file.click();
-    file.onchange = ()=>{ uploadFiles(r, file.files); file.value=''; };
+    file.onchange = ()=>{ const c=cur(); if (c) uploadFiles(c, file.files); file.value=''; };
     drop.ondragover = e=>{ e.preventDefault(); drop.classList.add('over'); };
     drop.ondragleave = ()=>drop.classList.remove('over');
-    drop.ondrop = e=>{ e.preventDefault(); drop.classList.remove('over'); uploadFiles(r, e.dataTransfer.files); };
+    drop.ondrop = e=>{ e.preventDefault(); drop.classList.remove('over'); const c=cur(); if (c) uploadFiles(c, e.dataTransfer.files); };
     f.querySelectorAll('[data-dl]').forEach(a=>a.onclick=()=>downloadAttachment(+a.dataset.dl));
-    f.querySelectorAll('[data-rmatt]').forEach(b=>b.onclick=()=>{ const ids=refIds(g(r,'pj')).filter(i=>i!==+b.dataset.rmatt); update(r,{pj:ids},{pj:['L',...ids]}); });
+    f.querySelectorAll('[data-rmatt]').forEach(b=>b.onclick=()=>{ const c=cur(); if(!c) return; const ids=refIds(g(c,'pj')).filter(i=>i!==+b.dataset.rmatt); update(c,{pj:ids},{pj:['L',...ids]}); });
   }
-  if (focusAfter){ const e=document.getElementById(focusAfter); if(e) e.focus(); focusAfter=null; }
+
+  /* commentaires */
+  f.querySelectorAll('[data-draft]').forEach(t=>t.oninput = ()=>{ drafts[t.dataset.draft] = t.value; });
+  f.querySelectorAll('[data-at]').forEach(b=>b.onclick=()=>openMenu(b.dataset.anchor, atMenu(b.dataset.at)));
+  f.querySelectorAll('[data-reply]').forEach(b=>b.onclick=()=>{ const el=$('rp-'+b.dataset.reply); el.style.display = el.style.display==='none' ? 'block' : 'none'; const ta=el.querySelector('textarea'); if (el.style.display==='block') ta.focus(); });
+  f.querySelectorAll('[data-send]').forEach(b=>b.onclick=async()=>{ const k='reply-'+b.dataset.send; const t=drafts[k]; if (await addComment(id, +b.dataset.send, t)){ delete drafts[k]; refreshFiche(); } });
+  f.querySelectorAll('[data-delc]').forEach(b=>b.onclick=()=>deleteComment(+b.dataset.delc));
+  const send = $('cm-send'); if (send) send.onclick = async()=>{ if (await addComment(id, 0, drafts['new'])){ delete drafts['new']; refreshFiche(); } };
 }
 
-/* ============ INTERACTIONS ============ */
+/* ============ INTERACTIONS : cartes et colonnes ============ */
 function cardOf(el){ const c = el.closest('.card'); return c ? index.get(+c.dataset.id) : null; }
 const isColDrag = e => e.dataTransfer && [...(e.dataTransfer.types||[])].includes('application/x-col');
 function wire(){
@@ -838,13 +1106,13 @@ function wire(){
     c.ondragstart = e=>{ dragId=+c.dataset.id; c.classList.add('dragging'); e.dataTransfer.setData('text/plain',String(dragId)); };
     c.ondragend = ()=>c.classList.remove('dragging');
     c.onclick = e=>{
-      if (e.target.closest('button,.addtag,.x')) return;
+      if (e.target.closest('button,.x')) return;
       const id = +c.dataset.id;
       grist.setCursorPos({rowId:id}).catch(()=>{});
       openFiche(id);
     };
   });
-  document.querySelectorAll('.col h2').forEach(h=>{
+  document.querySelectorAll('.col h2[draggable]').forEach(h=>{
     h.ondragstart = e=>{ e.dataTransfer.setData('application/x-col', h.dataset.colh); e.dataTransfer.effectAllowed='move'; };
   });
   document.querySelectorAll('.col').forEach(col=>{
@@ -854,25 +1122,20 @@ function wire(){
       e.preventDefault(); col.classList.remove('over','colover');
       if (isColDrag(e)){ moveColumn(e.dataTransfer.getData('application/x-col'), col.dataset.group); return; }
       const r = index.get(+(e.dataTransfer.getData('text/plain') || dragId)); if(!r) return;
-      update(r, {groupe: col.dataset.group});
+      update(r, {[groupKey()]: col.dataset.group || null});
     };
   });
   document.querySelectorAll('[data-add]').forEach(b=>b.onclick=()=>openNewPop(b.dataset.add));
-  document.querySelectorAll('[data-addtag]').forEach(b=>b.onclick=e=>{
-    e.stopPropagation();
-    if(!TAG_CATS.some(([k])=>map[k])){ alert("Associez au moins une colonne Étiquettes, Personas, Thèmes, Produit ou Sources dans la configuration du widget."); return; }
-    openTagPop(cardOf(b));
-  });
-  document.querySelectorAll('.card [data-rm]').forEach(x=>x.onclick=e=>{ e.stopPropagation(); removeTag(cardOf(x), x.dataset.rm, x.dataset.val); });
-  document.querySelectorAll('[data-vote]').forEach(b=>b.onclick=()=>{
-    const r = cardOf(b); update(r, {votes:(Number(g(r,'votes'))||0)+1});
-  });
+  document.querySelectorAll('[data-cplus]').forEach(b=>b.onclick=e=>{ e.stopPropagation(); const c = cardOf(b); if (c) openMenu(b.dataset.anchor, fieldPicker(c.id)); });
+  document.querySelectorAll('.card [data-rm]').forEach(x=>x.onclick=e=>{ e.stopPropagation(); const c=cardOf(x); if (c) removeValue(c, x.dataset.rm, x.dataset.val); });
+  document.querySelectorAll('[data-vote]').forEach(b=>b.onclick=()=>{ const r = cardOf(b); update(r, {votes:(Number(g(r,'votes'))||0)+1}); });
   document.querySelectorAll('[data-tosuivi]').forEach(b=>b.onclick=()=>update(cardOf(b), {statut:'A faire'}));
   document.querySelectorAll('[data-tobacklog]').forEach(b=>b.onclick=()=>update(cardOf(b), {statut:null}));
 }
+document.addEventListener('click', e=>{ if (menu && !e.target.closest('#menu') && !e.target.closest('[data-anchor]')) closeMenu(); });
 document.addEventListener('keydown', e=>{
   if (e.key!=='Escape') return;
-  if (document.getElementById('pop').style.display==='block') closePop(); else closeFiche();
+  if (menu) closeMenu(); else if (manage) closeManage(); else if ($('pop').style.display==='block') closePop(); else closeFiche();
 });
 
 /* ============ GRIST ============ */
@@ -886,6 +1149,7 @@ grist.onOptions(o=>{
   if (o && o.red != null) thr.red = Number(o.red);
   render();
 });
+let commentsStarted = false;
 grist.onRecords(async (recs, mappings)=>{
   nCalls++; lastCall = new Date().toLocaleTimeString('fr-FR')+' – '+((recs||[]).length)+' ligne(s)';
   map = mappings ? {...mappings} : null;
@@ -894,6 +1158,7 @@ grist.onRecords(async (recs, mappings)=>{
   rawRecs = recs || []; rawFirst = rawRecs[0] || null;
   ingest();
   ensureMeta();
+  if (!commentsStarted && host){ commentsStarted = true; loadComments(); setInterval(()=>{ if (!document.hidden) loadComments(); }, COMMENTS_POLL_MS); }
 });
 </script>
 </body>
