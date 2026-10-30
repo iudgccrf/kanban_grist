@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Kanban Grist (multi-espaces)</title>
+<title>Kanban Grist</title>
 <script src="https://docs.getgrist.com/grist-plugin-api.js"></script>
 <style>
   :root { --bg:#f4f5f7; --col:#eeeef0; --card:#fff; --txt:#161616; --muted:#666; --accent:#3a55d8; }
@@ -21,14 +21,14 @@
   .col h2 { margin:2px 4px 8px; font-size:15px; display:flex; align-items:center; gap:8px; }
   .dot { width:14px; height:14px; border-radius:50%; flex:none; }
   .count { margin-left:auto; background:#dde0e6; border-radius:10px; font-size:11px; padding:1px 7px; }
-  .card { background:var(--card); border-radius:4px; padding:9px 10px; margin-bottom:8px; box-shadow:0 1px 2px rgba(0,0,0,.18); cursor:grab; }
+  .card { background:var(--card); border-radius:4px; padding:9px 10px; margin-bottom:8px; box-shadow:0 1px 2px rgba(0,0,0,.18); cursor:pointer; }
   .card:hover { box-shadow:0 2px 6px rgba(0,0,0,.28); }
   .card.dragging { opacity:.4; }
+  .card.open { outline:2px solid var(--accent); }
   .tags { display:flex; flex-wrap:wrap; gap:4px; margin-bottom:6px; }
   .tag { font-size:11px; font-weight:700; padding:2px 6px; border-radius:3px; white-space:nowrap; }
   .tag .x { margin-left:3px; opacity:.45; cursor:pointer; }
   .tag .x:hover { opacity:1; }
-  .tag.space { border-radius:10px; }
   .addtag { font-size:11px; padding:2px 7px; border:1px dashed #aab; border-radius:3px; color:#667; cursor:pointer; white-space:nowrap; }
   .addtag:hover { background:#eef1ff; color:var(--accent); border-color:var(--accent); }
   .title { font-size:14px; line-height:1.3; margin:2px 0 8px; }
@@ -41,17 +41,40 @@
   .avatars { margin-left:auto; display:flex; }
   .av { width:26px; height:26px; border-radius:50%; background:#c99a14; color:#fff; font-size:10px; font-weight:700; display:flex; align-items:center; justify-content:center; margin-left:-6px; border:2px solid #fff; }
   .add { color:var(--accent); font-weight:600; cursor:pointer; padding:6px 4px; background:none; border:0; font:inherit; font-weight:600; }
-  .vote, .tosuivi, .tobacklog, .move { border:1px solid #ccc; background:#fafafa; border-radius:12px; padding:1px 8px; cursor:pointer; font:inherit; font-size:12px; }
-  .vote:hover, .move:hover { background:#eaf0ff; }
+  .vote, .tosuivi, .tobacklog { border:1px solid #ccc; background:#fafafa; border-radius:12px; padding:1px 8px; cursor:pointer; font:inherit; font-size:12px; }
+  .vote:hover { background:#eaf0ff; }
   .tosuivi, .tobacklog { margin-left:auto; }
   .msg { padding:30px; color:var(--muted); }
+  .info { margin:8px 12px 0; padding:5px 10px; background:#eef2ff; border:1px solid #cdd6f7; border-radius:4px; font-size:12px; color:#2b3a7a; }
   .warn { margin:8px 12px 0; padding:6px 10px; background:#fff4d6; border:1px solid #f0d58a; border-radius:4px; font-size:12px; }
-  #panel { display:none; position:fixed; top:0; right:0; bottom:0; width:290px; background:#fff; border-left:1px solid #ccc; box-shadow:-4px 0 12px rgba(0,0,0,.15); z-index:20; overflow-y:auto; padding:12px; }
-  #panel h3 { margin:14px 0 6px; font-size:13px; }
-  #panel .row { display:flex; align-items:center; gap:8px; margin:4px 0; }
+
+  /* panneaux latéraux : couleurs et fiche de carte */
+  #panel, #fiche { display:none; position:fixed; top:0; right:0; bottom:0; background:#fff; border-left:1px solid #ccc; box-shadow:-4px 0 12px rgba(0,0,0,.15); z-index:20; overflow-y:auto; padding:12px; }
+  #panel { width:290px; }
+  #fiche { width:350px; }
+  #panel h3, #fiche h3 { margin:16px 0 6px; font-size:13px; }
+  #panel .row, #fiche .row { display:flex; align-items:center; gap:8px; margin:4px 0; }
   #panel input[type=color] { width:34px; height:24px; padding:0; border:1px solid #ccc; border-radius:3px; background:none; cursor:pointer; }
   #panel input[type=number] { width:54px; }
-  #panel .close { float:right; border:0; background:none; font-size:18px; cursor:pointer; }
+  .close { float:right; border:0; background:none; font-size:20px; cursor:pointer; line-height:1; }
+  #fiche input[type=text], #fiche select { font:inherit; padding:5px 7px; border:1px solid #ccc; border-radius:4px; background:#fff; min-width:0; }
+  #fiche .ftitle { width:100%; font-size:16px; font-weight:700; padding:6px 8px; margin-top:4px; }
+  #fiche .grow { flex:1; }
+  #fiche .cat { margin:8px 0 12px; }
+  #fiche .catl { font-size:12px; color:var(--muted); margin-bottom:4px; }
+  #fiche .ftags { display:flex; flex-wrap:wrap; gap:4px; margin-bottom:5px; min-height:4px; }
+  #fiche .btn { font:inherit; border:1px solid var(--accent); background:var(--accent); color:#fff; border-radius:4px; padding:5px 11px; cursor:pointer; }
+  #fiche .btn.light { background:#fff; color:var(--accent); }
+  .bar { height:6px; background:#e3e6ee; border-radius:3px; overflow:hidden; margin:4px 0 8px; }
+  .bar > i { display:block; height:100%; background:#17b3a3; }
+  .ci { display:flex; align-items:center; gap:7px; margin:3px 0; }
+  .ci input[type=checkbox] { width:16px; height:16px; flex:none; cursor:pointer; }
+  .ci input[type=text] { flex:1; border-color:transparent !important; padding:3px 5px !important; }
+  .ci input[type=text]:hover, .ci input[type=text]:focus { border-color:#ccc !important; }
+  .ci.done input[type=text] { text-decoration:line-through; color:#888; }
+  .ci .del { border:0; background:none; cursor:pointer; color:#999; font-size:16px; }
+  .ci .del:hover { color:#c00; }
+
   #pop { display:none; position:fixed; top:80px; left:50%; transform:translateX(-50%); width:310px; background:#fff; border:1px solid #bbb; border-radius:6px; box-shadow:0 6px 24px rgba(0,0,0,.3); z-index:30; padding:12px; }
   #pop .row { display:flex; gap:6px; margin:8px 0; }
   #pop select, #pop input { font:inherit; padding:5px 6px; border:1px solid #ccc; border-radius:4px; flex:1; min-width:0; }
@@ -65,29 +88,22 @@
 <div id="warn"></div>
 <div id="board"><div class="msg">Chargement… Associez les colonnes dans le panneau de configuration du widget.</div></div>
 <div id="panel"></div>
+<div id="fiche"></div>
 <div id="pop"></div>
 
 <script>
 /* ============ CONFIGURATION ============ */
-// Les espaces = les tables Grist. La PREMIÈRE est l'espace "Projet" (tâches partagées, filtrées par responsable dans "Mes tâches").
-// Les identifiants de table (table) doivent correspondre exactement à ceux de Grist (Données brutes).
-// Toutes les tables doivent avoir les mêmes identifiants de colonnes que celle où le widget est installé.
-const SPACES = [
-  {table:'Taches',         label:'Projet', color:'#3a55d8', assigned:true},
-  {table:'Taches_perso',   label:'Perso',  color:'#17b3a3'},
-  {table:'Taches_privees', label:'Privé',  color:'#8a4fd8'},
-];
-const POLL_MS = 8000;           // rafraîchissement des autres tables
-
 const STATUTS = ['A faire','En cours','Bloqué','A valider','Terminé','Abandonné','Archivé'];
 const PRIOS   = ['P0 Critique','P1 Important','P2 Souhaitable','P3 Appréciable','Nouveau','Abandonné','Déjà prévu'];
+const CHARGES = ['XS','S','M','L','XL'];
 const STATUT_TERMINE = ['Terminé','Archivé'];   // dates affichées en vert
 const STATUT_COLORS = ['#1e9ac8','#9bbf5a','#e5484d','#f5a623','#17b3a3','#8a8f98','#555b66'];
 const PRIO_COLORS   = ['#e5484d','#f5a623','#1e9ac8','#6b8fb8','#9bbf5a','#8a8f98','#555b66'];
 const PALETTE = [['#fdf1c4','#6b5a10'],['#fcd9d9','#8a2b2b'],['#d6eef7','#1f5f78'],['#dcebd9','#355a2f'],
                  ['#e8dcf5','#59397a'],['#ffe2c9','#8a4a12'],['#d9ecec','#245f5f'],['#ffd9e8','#8a2b55']];
 const PRIO_TAG = [[/^P0/,['#fcd9d9','#b3202f']],[/^P1/,['#fff0c2','#8a5a00']],[/^P2/,['#d6eef7','#1f5f78']],[/^P3/,['#dde6f2','#3b5a80']]];
-const TAG_CATS = [['etiquettes','Étiquette'],['themes','Thème'],['produit','Produit'],['sources','Source']];
+// Catégories d'étiquettes modifiables depuis la carte (clé du widget, libellé)
+const TAG_CATS = [['etiquettes','Étiquettes'],['themes','Thèmes'],['produit','Produit'],['sources','Sources']];
 
 const COLS = [
   {name:'titre',        title:'Titre de la tâche',                    type:'Text'},
@@ -101,7 +117,7 @@ const COLS = [
   {name:'etiquettes',   title:'Étiquettes libres (Liste de choix)',   type:'ChoiceList', optional:true},
   {name:'personnes',    title:'Responsables (colonne texte/formule)', type:'Text,ChoiceList', optional:true},
   {name:'echeance',     title:"Date d'échéance",                      type:'Date,DateTime', optional:true},
-  {name:'checklist',    title:'Checklist (texte "- [ ] / - [x]")',    type:'Text', optional:true},
+  {name:'checklist',    title:'Checklist (colonne Texte)',            type:'Text', optional:true},
   {name:'pj',           title:'Pièces jointes',                       type:'Attachments', optional:true},
   {name:'commentaires', title:'Nb de commentaires',                   type:'Int,Numeric', optional:true},
   {name:'votes',        title:'Votes',                                type:'Int,Numeric', optional:true},
@@ -110,17 +126,17 @@ const COLS = [
 /* ============ ÉTAT ============ */
 let mode = 'suivi';            // suivi | backlog | perso
 let moi = '';                  // nom de la personne pour le mode "perso"
-let map = null;
+let map = null;                // association des colonnes
 let host = null;               // identifiant de la table où le widget est installé
-let hostRecs = [];             // enregistrements de la table hôte (onRecords)
-let otherRecs = {};            // tableId -> enregistrements des autres tables
-let errors = {};               // tableId -> message d'erreur (pas d'accès, table absente…)
-let records = [];              // tous les enregistrements fusionnés
-let index = new Map();         // clé "table|id" -> enregistrement
+let records = [];              // enregistrements de la table
+let index = new Map();         // id -> enregistrement
 let colors = {groups:{}, tags:{}};
 let thr = {orange:3, red:1};
 let panelOpen = false;
-const F = {espace:'',prio:'',charge:'',theme:'',personne:'',produit:'',source:'',etiquette:'',from:'',to:'',q:''};
+let openId = null;             // carte ouverte dans la fiche
+let ficheSig = '';             // signature de la carte affichée (évite de reconstruire la fiche inutilement)
+let focusAfter = null;         // champ à refocaliser après reconstruction de la fiche
+const F = {prio:'',charge:'',theme:'',personne:'',produit:'',source:'',etiquette:'',from:'',to:'',q:''};
 
 /* ============ OUTILS ============ */
 const esc = s => String(s ?? '').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -134,9 +150,7 @@ function rgb(hex){ const n=parseInt(hex.slice(1),16); return [n>>16&255,n>>8&255
 function toHex(a){ return '#'+a.map(v=>Math.round(v).toString(16).padStart(2,'0')).join(''); }
 function lighten(hex,p){ return toHex(rgb(hex).map(v=>v*(1-p)+255*p)); }
 function darken(hex,p){ return toHex(rgb(hex).map(v=>v*(1-p))); }
-function spaceOf(table){ return SPACES.find(s=>s.table===table) || {table, label:table, color:'#777'}; }
 function defaultTagColors(label,kind){
-  if (kind==='espace'){ const sp = SPACES.find(s=>s.label===label); if (sp) return [lighten(sp.color,.8), darken(sp.color,.35)]; }
   if (kind==='prio') for (const [re,col] of PRIO_TAG) if (re.test(label)) return col;
   return PALETTE[hash(label)%PALETTE.length];
 }
@@ -144,10 +158,10 @@ function tag(label, kind){
   let c = null;
   if (colors.tags[label]) c = [lighten(colors.tags[label],.8), darken(colors.tags[label],.45)];
   if (!c) c = defaultTagColors(label,kind);
-  return `<span class="tag${kind==='espace'?' space':''}" style="background:${c[0]};color:${c[1]}">${esc(label)}</span>`;
+  return `<span class="tag" style="background:${c[0]};color:${c[1]}">${esc(label)}</span>`;
 }
 function tagX(label, key){
-  return tag(label).replace(/<\/span>$/, `<span class="x" data-rm="${key}" data-val="${esc(label)}" title="Retirer ce tag">×</span></span>`);
+  return tag(label).replace(/<\/span>$/, `<span class="x" data-rm="${key}" data-val="${esc(label)}" title="Retirer cette étiquette">×</span></span>`);
 }
 function toDate(v){
   if (v == null || v === '') return null;
@@ -157,44 +171,39 @@ function toDate(v){
 function dayStart(d){ const x=new Date(d); x.setHours(0,0,0,0); return x; }
 function fmtDate(d){ return d.toLocaleDateString('fr-FR',{day:'numeric',month:'short'}); }
 function initials(n){ return n.split(/\s+/).filter(Boolean).map(w=>w[0]).join('').slice(0,2).toUpperCase(); }
-function checklistCount(t){
-  let done=0,total=0;
-  for (const l of String(t||'').split('\n')){
-    const m = l.match(/^\s*[-*]\s*\[( |x|X)\]/);
-    if (m){ total++; if (m[1].toLowerCase()==='x') done++; }
-  }
-  return {done,total};
-}
 function g(r,k){ return map && map[k] ? r[k] : undefined; }
-function available(table){ return table===host || (!errors[table] && otherRecs[table]); }
 
-/* ============ CHARGEMENT DES TABLES ============ */
-function rowsFrom(t, table){
-  const n = (t.id||[]).length, out = [];
-  for (let i=0;i<n;i++){
-    const r = {id:t.id[i], _table:table, _key:table+'|'+t.id[i]};
-    for (const k in map) r[k] = (map[k] && t[map[k]]) ? t[map[k]][i] : undefined;
-    out.push(r);
-  }
-  return out;
+/* ---- Checklist : texte, une ligne par point "- [ ] à faire" / "- [x] fait" ---- */
+const CL_RE = /^(\s*[-*]\s*)\[( |x|X)\]\s?(.*)$/;
+function parseChecklist(text){
+  const lines = String(text||'').split('\n');
+  const items = [];
+  lines.forEach((l,i)=>{ const m = l.match(CL_RE); if (m) items.push({i, done:m[2].toLowerCase()==='x', text:m[3]}); });
+  return {lines, items};
 }
-async function loadOthers(){
-  if (!map || !host) return;
-  for (const sp of SPACES){
-    if (sp.table===host) continue;
-    try { otherRecs[sp.table] = rowsFrom(await grist.docApi.fetchTable(sp.table), sp.table); delete errors[sp.table]; }
-    catch(e){ errors[sp.table] = (e && e.message) || String(e); otherRecs[sp.table] = []; }
-  }
-  rebuild(); render();
+function checklistCount(t){
+  const {items} = parseChecklist(t);
+  return {done: items.filter(x=>x.done).length, total: items.length};
 }
-function rebuild(){
-  records = [...hostRecs, ...SPACES.filter(s=>s.table!==host).flatMap(s=>otherRecs[s.table]||[])];
-  index = new Map(records.map(r=>[r._key,r]));
+
+/* ============ ÉCRITURE DANS GRIST ============ */
+// Met à jour la carte tout de suite à l'écran (optimiste), puis écrit dans Grist.
+// changes : {cléWidget: valeur affichée} ; encoded : {cléWidget: valeur envoyée à Grist} (listes : ['L', ...])
+async function update(card, changes, encoded){
+  const cols = {};
+  for (const k in changes){
+    if (!map[k]) continue;
+    card[k] = changes[k];
+    cols[map[k]] = (encoded && k in encoded) ? encoded[k] : changes[k];
+  }
+  if (!Object.keys(cols).length) return;
+  render();
+  await act([['UpdateRecord', host, card.id, cols]]);
 }
 async function act(actions){
+  if (!host){ alert("Table du widget introuvable : rechargez la page."); return; }
   try { await grist.docApi.applyUserActions(actions); }
   catch(e){ alert('Action refusée ou impossible : ' + ((e && e.message) || e)); }
-  await loadOthers();
 }
 
 /* ============ FILTRAGE ============ */
@@ -205,20 +214,17 @@ function groupList(){
   const extra = [...new Set(records.map(r=>r.groupe).filter(v=>v && !seen.has(v)))];
   return [...base,...extra].map((n,i)=>({name:n,color:colors.groups[n]||defaults[i]||'#999'}));
 }
+// Règle Backlog / Suivi : un Statut renseigné = Suivi ; pas de Statut = Backlog
+function inView(r){
+  if (!map.statut) return true;
+  const hasStatut = !!g(r,'statut');
+  return mode==='backlog' ? !hasStatut : hasStatut;
+}
 function passes(r){
   const l = k => toList(g(r,k));
-  const sp = spaceOf(r._table);
-  if (F.espace && sp.label !== F.espace) return false;
-  // Règle Backlog / Suivi : un Statut renseigné = Suivi ; pas de Statut = Backlog
-  if (map.statut){
-    const hasStatut = !!g(r,'statut');
-    if (mode==='backlog' && hasStatut) return false;
-    if (mode!=='backlog' && !hasStatut) return false;
-  }
-  // Mode "Mes tâches" : tâches Projet = celles dont je suis responsable ; Perso / Privé = toutes
-  if (mode==='perso'){
-    if (sp.assigned && moi && !l('personnes').includes(moi)) return false;
-  } else if (F.personne && !l('personnes').includes(F.personne)) return false;
+  if (!inView(r)) return false;
+  const who = mode==='perso' ? moi : F.personne;       // "Mes tâches" : mes tâches uniquement
+  if (who && !l('personnes').includes(who)) return false;
   if (F.prio && g(r,'prio') !== F.prio) return false;
   if (F.charge && g(r,'charge') !== F.charge) return false;
   if (F.theme && !l('themes').includes(F.theme)) return false;
@@ -237,22 +243,21 @@ function passes(r){
   return true;
 }
 function uniq(key){ return [...new Set(records.flatMap(r=>toList(g(r,key))))].sort((a,b)=>a.localeCompare(b,'fr')); }
+function uniqSingle(key, base=[]){ return [...new Set([...base, ...records.map(r=>g(r,key)).filter(Boolean)])]; }
 
 /* ============ RENDU ============ */
 function renderHeader(){
   const opt = (arr,val) => `<option value="">— tous —</option>` + arr.map(v=>`<option ${v===val?'selected':''}>${esc(v)}</option>`).join('');
   const sel = (id,label,arr,val) => map ? `<label>${label}<select id="${id}">${opt(arr,val)}</select></label>` : '';
   const has = k => map && map[k];
-  const spaces = SPACES.filter(s=>available(s.table)).map(s=>s.label);
   let h = `<label>Mode <select id="mode">
       <option value="suivi" ${mode==='suivi'?'selected':''}>Suivi de projet</option>
       <option value="backlog" ${mode==='backlog'?'selected':''}>Backlog</option>
       <option value="perso" ${mode==='perso'?'selected':''}>Mes tâches</option></select></label>`;
-  h += sel('f-espace','Espace',spaces,F.espace);
-  if (mode!=='backlog' && has('prio')) h += sel('f-prio','Prio',[...new Set(records.map(r=>g(r,'prio')).filter(Boolean))],F.prio);
-  if (has('charge')) h += sel('f-charge','Charge',[...new Set(records.map(r=>g(r,'charge')).filter(Boolean))],F.charge);
+  if (mode!=='backlog' && has('prio')) h += sel('f-prio','Prio',uniqSingle('prio'),F.prio);
+  if (has('charge')) h += sel('f-charge','Charge',uniqSingle('charge'),F.charge);
   if (has('themes')) h += sel('f-theme','Thème',uniq('themes'),F.theme);
-  if (has('personnes')) h += sel('f-personne','Personne',uniq('personnes'),mode==='perso'?moi:F.personne);
+  if (has('personnes')) h += sel('f-personne', mode==='perso'?'Moi':'Personne', uniq('personnes'), mode==='perso'?moi:F.personne);
   if (has('produit')) h += sel('f-produit','Produit',uniq('produit'),F.produit);
   if (has('sources')) h += sel('f-source','Source',uniq('sources'),F.source);
   if (has('etiquettes')) h += sel('f-etiquette','Étiquette',uniq('etiquettes'),F.etiquette);
@@ -261,23 +266,31 @@ function renderHeader(){
   h += `<button id="reset">Réinitialiser</button><span class="spacer"></span><button id="colorsBtn">🎨 Couleurs</button>`;
   document.getElementById('hdr').innerHTML = h;
 
-  const bind = (id,key,cb) => { const e=document.getElementById(id); if(e) e.onchange = ()=>{F[key]=e.value; cb&&cb(e.value); render();}; };
-  bind('f-espace','espace'); bind('f-prio','prio'); bind('f-charge','charge'); bind('f-theme','theme');
+  const bind = (id,key) => { const e=document.getElementById(id); if(e) e.onchange = ()=>{F[key]=e.value; render();}; };
+  bind('f-prio','prio'); bind('f-charge','charge'); bind('f-theme','theme');
+  bind('f-produit','produit'); bind('f-source','source'); bind('f-etiquette','etiquette'); bind('f-from','from'); bind('f-to','to');
   const fp = document.getElementById('f-personne');
   if (fp) fp.onchange = ()=>{ if(mode==='perso'){ moi=fp.value; grist.setOption('moi',moi); } else F.personne=fp.value; render(); };
-  bind('f-produit','produit'); bind('f-source','source'); bind('f-etiquette','etiquette'); bind('f-from','from'); bind('f-to','to');
   const q=document.getElementById('f-q'); if(q) q.oninput = ()=>{F.q=q.value; renderBoard();};
   document.getElementById('mode').onchange = e=>{ mode=e.target.value; grist.setOption('mode',mode); render(); };
-  document.getElementById('colorsBtn').onclick = ()=>{ panelOpen=!panelOpen; renderPanel(); };
+  document.getElementById('colorsBtn').onclick = ()=>{ panelOpen=!panelOpen; if(panelOpen) closeFiche(); renderPanel(); };
   document.getElementById('reset').onclick = ()=>{ Object.keys(F).forEach(k=>F[k]=''); render(); };
 }
 function renderWarn(){
   const w = document.getElementById('warn');
   const parts = [];
-  if (host && !SPACES.some(s=>s.table===host))
-    parts.push(`Ce widget est sur la table « ${esc(host)} » qui n'est pas dans la liste SPACES du code (${SPACES.map(s=>esc(s.table)).join(', ')}).`);
-  for (const t in errors) parts.push(`Espace « ${esc(spaceOf(t).label)} » indisponible (table « ${esc(t)} » introuvable ou accès refusé).`);
-  w.innerHTML = parts.map(p=>`<div class="warn">${p}</div>`).join('');
+  if (map && mode!=='backlog' && map.statut && map.groupe && map.statut!==map.groupe)
+    parts.push(`<div class="warn"><b>Association à corriger</b> : en mode Suivi / Mes tâches, « Colonne du Kanban » (${esc(map.groupe)}) et « Statut » (${esc(map.statut)}) doivent être la <b>même colonne</b> (Statut). Sinon les cartes créées ou déplacées n'ont pas de Statut et sont rangées dans le Backlog.</div>`);
+  if (map){
+    const total = records.length, inv = records.filter(inView).length, shown = records.filter(passes).length;
+    let t = `${total} ligne(s) reçue(s) de « ${esc(host||'?')} » · ${shown} affichée(s) dans cette vue`;
+    if (inv<total) t += ` · ${total-inv} dans l'autre vue (${mode==='backlog'?'Suivi':'Backlog'}) à cause du Statut`;
+    if (inv>shown) t += ` · ${inv-shown} masquée(s) par les filtres`;
+    t += `. Colonne du Kanban → <b>${esc(map.groupe||'?')}</b> · Statut → <b>${esc(map.statut||'non associé')}</b>.`;
+    if (!total) t += ` <b>Grist n'envoie aucune ligne</b> : vérifiez qu'aucun filtre n'est actif sur le widget (bouton « Enregistrer » / ↺ en haut à droite de la section).`;
+    parts.push(`<div class="info">${t}</div>`);
+  }
+  w.innerHTML = parts.join('');
 }
 
 function dateBadge(r){
@@ -293,27 +306,24 @@ function dateBadge(r){
 }
 function cardHtml(r){
   const l = k => toList(g(r,k));
-  const sp = spaceOf(r._table);
   let tags = '';
-  if (!F.espace) tags += tag(sp.label,'espace');
   if (mode!=='backlog' && g(r,'prio')) tags += tag(g(r,'prio'),'prio');
   if (g(r,'charge')) tags += tag(g(r,'charge'));
   l('etiquettes').forEach(t=>tags+=tagX(t,'etiquettes'));
   l('produit').forEach(t=>tags+=tagX(t,'produit'));
   l('themes').forEach(t=>tags+=tagX(t,'themes'));
   l('sources').forEach(t=>tags+=tagX(t,'sources'));
-  tags += `<span class="addtag" data-addtag="1" title="Ajouter un tag (existant ou nouveau)">+ tag</span>`;
+  tags += `<span class="addtag" data-addtag="1" title="Ajouter une étiquette">+ étiquette</span>`;
   let meta = dateBadge(r);
   const cl = checklistCount(g(r,'checklist'));
   if (cl.total) meta += `<span>☑ ${cl.done}/${cl.total}</span>`;
   const pj = toList(g(r,'pj')).length; if (pj) meta += `<span>📎${pj}</span>`;
   if (mode!=='backlog' && map.commentaires && g(r,'commentaires')) meta += `<span>🗨️${g(r,'commentaires')}</span>`;
   if (mode==='backlog' && map.votes) meta += `<button class="vote" data-vote="1">👍 ${g(r,'votes')||0}</button>`;
-  if (SPACES.filter(s=>available(s.table)).length>1) meta += `<button class="move" data-move="1" title="Déplacer vers un autre espace">⇄</button>`;
   if (mode==='backlog' && map.statut) meta += `<button class="tosuivi" data-tosuivi="1" title="Passer dans le suivi (statut A faire)">➜ Suivi</button>`;
   if (mode!=='backlog' && map.statut && g(r,'statut')==='A faire') meta += `<button class="tobacklog" data-tobacklog="1" title="Remettre dans le backlog (statut vidé)">⬅ Backlog</button>`;
   const av = l('personnes').map(n=>`<div class="av" title="${esc(n)}">${esc(initials(n))}</div>`).join('');
-  return `<div class="card" draggable="true" data-key="${esc(r._key)}">
+  return `<div class="card${r.id===openId?' open':''}" draggable="true" data-id="${r.id}">
     <div class="tags">${tags}</div>
     <div class="title">${esc(r.titre)||'<i>(sans titre)</i>'}</div>
     <div class="meta">${meta}<div class="avatars">${av}</div></div></div>`;
@@ -334,7 +344,8 @@ function renderBoard(){
   }).join('');
   wire();
 }
-function render(){ renderHeader(); renderWarn(); renderBoard(); renderPanel(); }
+function render(){ rebuild(); renderHeader(); renderWarn(); renderBoard(); renderPanel(); renderFiche(); }
+function rebuild(){ index = new Map(records.map(r=>[r.id,r])); }
 
 /* ---- Panneau de personnalisation des couleurs ---- */
 function saveColors(){ grist.setOption('colors', colors); }
@@ -345,14 +356,12 @@ function renderPanel(){
   const groups = groupList();
   const tagVals = [...new Set([
     ...records.map(r=>g(r,'prio')), ...records.map(r=>g(r,'charge')),
-    ...['etiquettes','produit','themes','sources'].flatMap(k=>records.flatMap(r=>toList(g(r,k))))
+    ...TAG_CATS.map(([k])=>k).flatMap(k=>records.flatMap(r=>toList(g(r,k))))
   ].filter(Boolean))].sort((a,b)=>a.localeCompare(b,'fr'));
-  const spaceRows = SPACES.map(s=>`<div class="row"><input type="color" data-tag="${esc(s.label)}" value="${colors.tags[s.label]||s.color}"> ${tag(s.label,'espace')}</div>`).join('');
   p.innerHTML = `<button class="close" id="pclose">×</button><b>Personnalisation</b>
-    <h3>Espaces</h3>${spaceRows}
     <h3>Colonnes du Kanban</h3>
     ${groups.map(gr=>`<div class="row"><input type="color" data-grp="${esc(gr.name)}" value="${gr.color.length===7?gr.color:'#999999'}"> ${esc(gr.name)}</div>`).join('')}
-    <h3>Tags (couleur de base : le fond est éclairci automatiquement)</h3>
+    <h3>Étiquettes (couleur de base : le fond est éclairci automatiquement)</h3>
     ${tagVals.map(v=>`<div class="row"><input type="color" data-tag="${esc(v)}" value="${colors.tags[v]||defaultTagColors(v,'')[1]}"> ${tag(v)}</div>`).join('')}
     <h3>Alertes d'échéance</h3>
     <div class="row">Orange à <input type="number" id="t-orange" min="0" value="${thr.orange}"> jour(s) ou moins</div>
@@ -372,14 +381,14 @@ function renderPanel(){
   document.getElementById('creset').onclick = ()=>{ colors={groups:{},tags:{}}; saveColors(); render(); };
 }
 
-/* ============ TAGS : ajout / retrait depuis la carte ============ */
+/* ============ ÉTIQUETTES ============ */
 function isListCol(key){
   const vals = records.map(r=>g(r,key)).filter(v=>v!=null && v!=='');
   return vals.length===0 || vals.some(v=>Array.isArray(v));
 }
 function writeTags(card, key, list){
-  const val = isListCol(key) ? ['L',...list] : (list[0] ?? null);
-  return act([['UpdateRecord', card._table, card.id, {[map[key]]: val}]]);
+  if (isListCol(key)) return update(card, {[key]: list}, {[key]: ['L',...list]});
+  return update(card, {[key]: list[0] ?? null});      // colonne "Choix" simple : une seule valeur
 }
 function addTag(card, key, value){
   value = String(value||'').trim(); if (!value) return;
@@ -390,13 +399,15 @@ function addTag(card, key, value){
 function removeTag(card, key, value){
   return writeTags(card, key, toList(g(card,key)).filter(v=>v!==value));
 }
+
+/* ============ POPUPS (+ étiquette sur la carte, nouvelle carte) ============ */
 function closePop(){ document.getElementById('pop').style.display='none'; }
 function openPop(html){ const p=document.getElementById('pop'); p.innerHTML=html; p.style.display='block'; return p; }
 function openTagPop(card){
   const cats = TAG_CATS.filter(([k])=>map[k]);
-  openPop(`<b>Ajouter un tag</b>
+  openPop(`<b>Ajouter une étiquette</b>
     <div class="row"><select id="pc">${cats.map(([k,n])=>`<option value="${k}">${n}</option>`).join('')}</select></div>
-    <div class="row"><input id="pv" list="pl" placeholder="Choisir ou taper un nouveau tag…" autocomplete="off"><datalist id="pl"></datalist></div>
+    <div class="row"><input id="pv" list="pl" placeholder="Choisir ou taper un nouveau nom…" autocomplete="off"><datalist id="pl"></datalist></div>
     <div class="hint">Un nom qui n'existe pas encore est créé automatiquement.</div>
     <div class="row" style="justify-content:flex-end"><button id="pcancel">Annuler</button><button class="primary" id="pok">Ajouter</button></div>`);
   const fill = ()=>{ document.getElementById('pl').innerHTML = uniq(document.getElementById('pc').value).map(v=>`<option value="${esc(v)}">`).join(''); };
@@ -407,19 +418,14 @@ function openTagPop(card){
   document.getElementById('pv').onkeydown = e=>{ if(e.key==='Enter') ok(); if(e.key==='Escape') closePop(); };
   document.getElementById('pv').focus();
 }
-
-/* ============ NOUVELLE CARTE ============ */
 function openNewPop(group){
-  const sps = SPACES.filter(s=>available(s.table));
-  const def = (SPACES.find(s=>s.label===F.espace) || sps[0] || {}).table;
   openPop(`<b>Nouvelle carte</b> <span class="hint">(${esc(group)})</span>
-    <div class="row"><select id="ns">${sps.map(s=>`<option value="${esc(s.table)}" ${s.table===def?'selected':''}>${esc(s.label)}</option>`).join('')}</select></div>
     <div class="row"><input id="nt" placeholder="Titre de la tâche…" autocomplete="off"></div>
     <div class="row" style="justify-content:flex-end"><button id="ncancel">Annuler</button><button class="primary" id="nok">Créer</button></div>`);
   const ok = ()=>{
-    const t = document.getElementById('nt').value.trim(); const table = document.getElementById('ns').value;
+    const t = document.getElementById('nt').value.trim();
     if (!t) return; closePop();
-    act([['AddRecord', table, null, {[map.titre]: t, [map.groupe]: group}]]);
+    act([['AddRecord', host, null, {[map.titre]: t, [map.groupe]: group}]]);
   };
   document.getElementById('nok').onclick = ok;
   document.getElementById('ncancel').onclick = closePop;
@@ -427,60 +433,92 @@ function openNewPop(group){
   document.getElementById('nt').focus();
 }
 
-/* ============ DÉPLACER UNE CARTE VERS UN AUTRE ESPACE ============ */
-async function dataColumns(tableId){
-  const T = await grist.docApi.fetchTable('_grist_Tables');
-  const C = await grist.docApi.fetchTable('_grist_Tables_column');
-  const ti = T.id[T.tableId.indexOf(tableId)];
-  const cols = [];
-  C.id.forEach((_,i)=>{
-    if (C.parentId[i]===ti && !C.isFormula[i] && !/^(gristHelper_|manualSort)/.test(C.colId[i])) cols.push(C.colId[i]);
-  });
-  return cols;
+/* ============ FICHE DE LA CARTE (titre, étiquettes, checklist) ============ */
+function openFiche(id){ openId = id; panelOpen = false; ficheSig = ''; render(); }
+function closeFiche(){ if (openId===null) return; openId = null; ficheSig = ''; document.getElementById('fiche').style.display='none'; renderBoard(); }
+function sigOf(r){
+  return JSON.stringify([r.titre, r.groupe, g(r,'prio'), g(r,'charge'), g(r,'checklist'), ...TAG_CATS.map(([k])=>toList(g(r,k)))]);
 }
-async function moveCard(card, toTable){
-  try {
-    const src = await grist.docApi.fetchTable(card._table);
-    const row = src.id.indexOf(card.id);
-    if (row < 0) throw new Error('Carte introuvable dans la table source.');
-    const dstCols = new Set(await dataColumns(toTable));
-    const srcCols = new Set(await dataColumns(card._table));
-    const fields = {};
-    for (const c of dstCols){
-      if (!srcCols.has(c) || !(c in src)) continue;
-      const v = src[c][row];
-      if (v==null || v==='' || v===0 || (Array.isArray(v) && v.length<=1)) continue;   // laisse jouer les valeurs par défaut
-      fields[c] = v;
-    }
-    await grist.docApi.applyUserActions([['AddRecord', toTable, null, fields]]);   // 1) copie
-    await grist.docApi.applyUserActions([['RemoveRecord', card._table, card.id]]); // 2) suppression de l'original
-  } catch(e){
-    alert('Déplacement impossible (la carte n\'a pas été supprimée de son espace d\'origine si la copie a échoué) : ' + ((e && e.message) || e));
+function renderFiche(){
+  const f = document.getElementById('fiche');
+  const r = openId!==null ? index.get(openId) : null;
+  if (!r || !map){ f.style.display='none'; if (openId!==null && !r) openId=null; return; }
+  f.style.display = 'block';
+  const sig = sigOf(r);
+  if (sig===ficheSig && f.innerHTML) return;            // rien n'a changé : on ne touche pas à la saisie en cours
+  ficheSig = sig;
+
+  const cats = TAG_CATS.filter(([k])=>map[k]).map(([k,n])=>`
+    <div class="cat">
+      <div class="catl">${n}</div>
+      <div class="ftags">${toList(g(r,k)).map(t=>tagX(t,k)).join('') || '<span class="catl">aucune</span>'}</div>
+      <div class="row"><input type="text" class="grow" id="ta-${k}" list="dl-${k}" placeholder="Ajouter ou créer…" autocomplete="off">
+        <datalist id="dl-${k}">${uniq(k).filter(v=>!toList(g(r,k)).includes(v)).map(v=>`<option value="${esc(v)}">`).join('')}</datalist>
+        <button class="btn" data-fadd="${k}" title="Ajouter">+</button></div>
+    </div>`).join('');
+
+  let checklist;
+  if (!map.checklist) checklist = `<div class="catl">Associez une colonne <b>Texte</b> au champ « Checklist » dans la configuration du widget pour activer la checklist.</div>`;
+  else {
+    const {items} = parseChecklist(g(r,'checklist'));
+    const done = items.filter(x=>x.done).length;
+    checklist = `${items.length?`<div class="catl">${done}/${items.length} fait(s)</div><div class="bar"><i style="width:${Math.round(100*done/items.length)}%"></i></div>`:''}
+      ${items.map(x=>`<div class="ci${x.done?' done':''}"><input type="checkbox" data-cl-toggle="${x.i}" ${x.done?'checked':''}>
+        <input type="text" data-cl-text="${x.i}" value="${esc(x.text)}"><button class="del" data-cl-del="${x.i}" title="Supprimer ce point">×</button></div>`).join('')}
+      <div class="row"><input type="text" class="grow" id="cl-add" placeholder="Ajouter un point…" autocomplete="off"><button class="btn" id="cl-addbtn" title="Ajouter">+</button></div>`;
   }
-  await loadOthers();
-}
-function openMovePop(card){
-  const sps = SPACES.filter(s=>s.table!==card._table && available(s.table));
-  if (!sps.length) return;
-  openPop(`<b>Déplacer vers un autre espace</b>
-    <div class="row"><select id="mt">${sps.map(s=>`<option value="${esc(s.table)}">${esc(s.label)}</option>`).join('')}</select></div>
-    <div class="hint">La carte est copiée dans l'espace choisi puis supprimée de « ${esc(spaceOf(card._table).label)} ».</div>
-    <div class="row" style="justify-content:flex-end"><button id="mcancel">Annuler</button><button class="primary" id="mok">Déplacer</button></div>`);
-  document.getElementById('mcancel').onclick = closePop;
-  document.getElementById('mok').onclick = ()=>{ const t=document.getElementById('mt').value; closePop(); moveCard(card,t); };
+
+  const sel = (id, label, arr, val) => `<div class="grow"><div class="catl">${label}</div><select id="${id}" style="width:100%"><option value="">—</option>${arr.map(v=>`<option ${v===val?'selected':''}>${esc(v)}</option>`).join('')}</select></div>`;
+  f.innerHTML = `<button class="close" id="fclose" title="Fermer">×</button>
+    <div class="catl">Fiche de la carte</div>
+    <input type="text" class="ftitle" id="f-title" value="${esc(r.titre)}" placeholder="Titre de la tâche">
+    ${(map.prio||map.charge)?`<div class="row" style="margin-top:12px">${map.prio?sel('fp-prio','Priorité',uniqSingle('prio',PRIOS),g(r,'prio')):''}${map.charge?sel('fp-charge','Charge',uniqSingle('charge',CHARGES),g(r,'charge')):''}</div>`:''}
+    <h3>Étiquettes</h3>${cats || '<div class="catl">Associez au moins une colonne Étiquettes, Thèmes, Produit ou Sources.</div>'}
+    <h3>Checklist</h3>${checklist}`;
+
+  // --- branchements ---
+  document.getElementById('fclose').onclick = closeFiche;
+  document.getElementById('f-title').onchange = e=>{ const v=e.target.value.trim(); if (v!==r.titre) update(r,{titre:v}); };
+  const fp = document.getElementById('fp-prio'); if (fp) fp.onchange = ()=>update(r,{prio:fp.value||null});
+  const fc = document.getElementById('fp-charge'); if (fc) fc.onchange = ()=>update(r,{charge:fc.value||null});
+  f.querySelectorAll('[data-rm]').forEach(x=>x.onclick=()=>removeTag(r, x.dataset.rm, x.dataset.val));
+  const commitTag = k=>{ const inp=document.getElementById('ta-'+k); const v=inp.value; if(!v.trim()) return; focusAfter='ta-'+k; addTag(r,k,v); };
+  f.querySelectorAll('[data-fadd]').forEach(b=>b.onclick=()=>commitTag(b.dataset.fadd));
+  TAG_CATS.forEach(([k])=>{ const inp=document.getElementById('ta-'+k); if(inp) inp.onkeydown=e=>{ if(e.key==='Enter'){ e.preventDefault(); commitTag(k); } }; });
+
+  if (map.checklist){
+    const edit = fn => { const {lines} = parseChecklist(g(r,'checklist')); fn(lines); update(r,{checklist: lines.join('\n')}); };
+    f.querySelectorAll('[data-cl-toggle]').forEach(c=>c.onchange=()=>edit(lines=>{
+      const i=+c.dataset.clToggle; lines[i] = lines[i].replace(/\[( |x|X)\]/, c.checked?'[x]':'[ ]');
+    }));
+    f.querySelectorAll('[data-cl-text]').forEach(t=>t.onchange=()=>edit(lines=>{
+      const i=+t.dataset.clText, v=t.value.trim();
+      if (!v) lines.splice(i,1); else lines[i] = lines[i].replace(CL_RE, (m,pre,x)=>`${pre}[${x}] ${v}`);
+    }));
+    f.querySelectorAll('[data-cl-del]').forEach(b=>b.onclick=()=>edit(lines=>lines.splice(+b.dataset.clDel,1)));
+    const addItem = ()=>{
+      const inp=document.getElementById('cl-add'); const v=inp.value.trim(); if(!v) return;
+      focusAfter='cl-add';
+      edit(lines=>{ while(lines.length && lines[lines.length-1].trim()==='') lines.pop(); lines.push('- [ ] '+v); });
+    };
+    document.getElementById('cl-addbtn').onclick = addItem;
+    document.getElementById('cl-add').onkeydown = e=>{ if(e.key==='Enter'){ e.preventDefault(); addItem(); } };
+  }
+  if (focusAfter){ const e=document.getElementById(focusAfter); if(e) e.focus(); focusAfter=null; }
 }
 
 /* ============ INTERACTIONS ============ */
-function cardOf(el){ const c = el.closest('.card'); return c ? index.get(c.dataset.key) : null; }
+function cardOf(el){ const c = el.closest('.card'); return c ? index.get(+c.dataset.id) : null; }
 function wire(){
-  let dragKey = null;
+  let dragId = null;
   document.querySelectorAll('.card').forEach(c=>{
-    c.ondragstart = e=>{ dragKey=c.dataset.key; c.classList.add('dragging'); e.dataTransfer.setData('text/plain',dragKey); };
+    c.ondragstart = e=>{ dragId=+c.dataset.id; c.classList.add('dragging'); e.dataTransfer.setData('text/plain',String(dragId)); };
     c.ondragend = ()=>c.classList.remove('dragging');
     c.onclick = e=>{
       if (e.target.closest('button,.addtag,.x')) return;
-      const r = index.get(c.dataset.key);
-      if (r && r._table===host) grist.setCursorPos({rowId:r.id}).catch(()=>{});
+      const id = +c.dataset.id;
+      grist.setCursorPos({rowId:id}).catch(()=>{});
+      openFiche(id);
     };
   });
   document.querySelectorAll('.col').forEach(col=>{
@@ -488,8 +526,8 @@ function wire(){
     col.ondragleave = ()=>col.classList.remove('over');
     col.ondrop = e=>{
       e.preventDefault(); col.classList.remove('over');
-      const r = index.get(e.dataTransfer.getData('text/plain') || dragKey); if(!r) return;
-      act([['UpdateRecord', r._table, r.id, {[map.groupe]: col.dataset.group}]]);
+      const r = index.get(+(e.dataTransfer.getData('text/plain') || dragId)); if(!r) return;
+      update(r, {groupe: col.dataset.group});
     };
   });
   document.querySelectorAll('[data-add]').forEach(b=>b.onclick=()=>openNewPop(b.dataset.add));
@@ -498,19 +536,17 @@ function wire(){
     if(!TAG_CATS.some(([k])=>map[k])){ alert("Associez au moins une colonne Étiquettes, Thèmes, Produit ou Sources dans la configuration du widget."); return; }
     openTagPop(cardOf(b));
   });
-  document.querySelectorAll('[data-rm]').forEach(x=>x.onclick=e=>{ e.stopPropagation(); removeTag(cardOf(x), x.dataset.rm, x.dataset.val); });
+  document.querySelectorAll('.card [data-rm]').forEach(x=>x.onclick=e=>{ e.stopPropagation(); removeTag(cardOf(x), x.dataset.rm, x.dataset.val); });
   document.querySelectorAll('[data-vote]').forEach(b=>b.onclick=()=>{
-    const r = cardOf(b);
-    act([['UpdateRecord', r._table, r.id, {[map.votes]:(Number(g(r,'votes'))||0)+1}]]);
+    const r = cardOf(b); update(r, {votes:(Number(g(r,'votes'))||0)+1});
   });
-  document.querySelectorAll('[data-move]').forEach(b=>b.onclick=()=>openMovePop(cardOf(b)));
-  document.querySelectorAll('[data-tosuivi]').forEach(b=>b.onclick=()=>{
-    const r = cardOf(b); act([['UpdateRecord', r._table, r.id, {[map.statut]:'A faire'}]]);
-  });
-  document.querySelectorAll('[data-tobacklog]').forEach(b=>b.onclick=()=>{
-    const r = cardOf(b); act([['UpdateRecord', r._table, r.id, {[map.statut]:null}]]);
-  });
+  document.querySelectorAll('[data-tosuivi]').forEach(b=>b.onclick=()=>update(cardOf(b), {statut:'A faire'}));
+  document.querySelectorAll('[data-tobacklog]').forEach(b=>b.onclick=()=>update(cardOf(b), {statut:null}));
 }
+document.addEventListener('keydown', e=>{
+  if (e.key!=='Escape') return;
+  if (document.getElementById('pop').style.display==='block') closePop(); else closeFiche();
+});
 
 /* ============ GRIST ============ */
 grist.ready({ columns: COLS, requiredAccess: 'full', allowSelectBy: true });
@@ -525,11 +561,9 @@ grist.onOptions(o=>{
 grist.onRecords(async (recs, mappings)=>{
   map = mappings;
   if (!host){ try { host = await grist.selectedTable.getTableId(); } catch(e){ host = null; } }
-  hostRecs = (recs||[]).map(r=>({...r, _table:host, _key:host+'|'+r.id}));
-  rebuild(); render();
-  loadOthers();
+  records = recs || [];
+  render();
 });
-setInterval(()=>{ if (!document.hidden) loadOthers(); }, POLL_MS);
 </script>
 </body>
 </html>
