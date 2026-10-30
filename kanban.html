@@ -6,7 +6,7 @@
 <title>Kanban Grist</title>
 <script src="https://docs.getgrist.com/grist-plugin-api.js"></script>
 <style>
-  :root { --bg:#f4f5f7; --col:#eeeef0; --card:#fff; --txt:#161616; --muted:#666; --accent:#3a55d8; }
+  :root { --bg:#f4f5f7; --col:#eeeef0; --card:#fff; --txt:#161616; --muted:#666; --accent:#3a55d8; --accent-bg:#e3e8fb; }
   * { box-sizing:border-box; }
   body { margin:0; font-family:"Marianne","Segoe UI",Arial,sans-serif; background:var(--bg); color:var(--txt); font-size:13px; }
   header { position:sticky; top:0; z-index:5; background:#fff; border-bottom:1px solid #ddd; padding:8px 12px; display:flex; flex-wrap:wrap; gap:6px; align-items:center; }
@@ -18,7 +18,9 @@
   #board { display:flex; gap:12px; padding:12px; align-items:flex-start; overflow-x:auto; min-height:calc(100vh - 60px); }
   .col { flex:0 0 280px; background:var(--col); border-radius:6px; padding:8px; box-shadow:0 1px 2px rgba(0,0,0,.15); }
   .col.over { outline:2px dashed var(--accent); }
-  .col h2 { margin:2px 4px 8px; font-size:15px; display:flex; align-items:center; gap:8px; }
+  .col.colover { outline:3px solid var(--accent); }
+  .col h2 { margin:2px 4px 8px; font-size:15px; display:flex; align-items:center; gap:8px; cursor:grab; }
+  .col h2 .grip { color:#aaa; font-size:12px; letter-spacing:-2px; }
   .dot { width:14px; height:14px; border-radius:50%; flex:none; }
   .count { margin-left:auto; background:#dde0e6; border-radius:10px; font-size:11px; padding:1px 7px; }
   .card { background:var(--card); border-radius:4px; padding:9px 10px; margin-bottom:8px; box-shadow:0 1px 2px rgba(0,0,0,.18); cursor:pointer; }
@@ -39,7 +41,7 @@
   .d-red { background:#ffc9cc; color:#a3121d; }
   .d-grey { background:#e6e8ec; color:#555; }
   .avatars { margin-left:auto; display:flex; }
-  .av { width:26px; height:26px; border-radius:50%; background:#c99a14; color:#fff; font-size:10px; font-weight:700; display:flex; align-items:center; justify-content:center; margin-left:-6px; border:2px solid #fff; }
+  .av { width:26px; height:26px; border-radius:50%; background:#c99a14; color:#fff; font-size:10px; font-weight:700; display:flex; align-items:center; justify-content:center; margin-left:-6px; border:2px solid #fff; flex:none; }
   .add { color:var(--accent); font-weight:600; cursor:pointer; padding:6px 4px; background:none; border:0; font:inherit; font-weight:600; }
   .vote, .tosuivi, .tobacklog { border:1px solid #ccc; background:#fafafa; border-radius:12px; padding:1px 8px; cursor:pointer; font:inherit; font-size:12px; }
   .vote:hover { background:#eaf0ff; }
@@ -50,32 +52,64 @@
   .err { margin:8px 12px 0; padding:6px 10px; background:#ffd9dc; border:1px solid #e59aa1; border-radius:4px; font-size:12px; }
   .warn { margin:8px 12px 0; padding:6px 10px; background:#fff4d6; border:1px solid #f0d58a; border-radius:4px; font-size:12px; }
 
-  /* panneaux latéraux : couleurs et fiche de carte */
-  #panel, #fiche { display:none; position:fixed; top:0; right:0; bottom:0; background:#fff; border-left:1px solid #ccc; box-shadow:-4px 0 12px rgba(0,0,0,.15); z-index:20; overflow-y:auto; padding:12px; }
-  #panel { width:290px; }
-  #fiche { width:350px; }
-  #panel h3, #fiche h3 { margin:16px 0 6px; font-size:13px; }
-  #panel .row, #fiche .row { display:flex; align-items:center; gap:8px; margin:4px 0; }
+  /* panneau des couleurs */
+  #panel { display:none; position:fixed; top:0; right:0; bottom:0; width:290px; background:#fff; border-left:1px solid #ccc; box-shadow:-4px 0 12px rgba(0,0,0,.15); z-index:20; overflow-y:auto; padding:12px; }
+  #panel h3 { margin:14px 0 6px; font-size:13px; }
+  #panel .row { display:flex; align-items:center; gap:8px; margin:4px 0; }
   #panel input[type=color] { width:34px; height:24px; padding:0; border:1px solid #ccc; border-radius:3px; background:none; cursor:pointer; }
   #panel input[type=number] { width:54px; }
-  .close { float:right; border:0; background:none; font-size:20px; cursor:pointer; line-height:1; }
-  #fiche input[type=text], #fiche select { font:inherit; padding:5px 7px; border:1px solid #ccc; border-radius:4px; background:#fff; min-width:0; }
-  #fiche .ftitle { width:100%; font-size:16px; font-weight:700; padding:6px 8px; margin-top:4px; }
+  .close { border:0; background:none; font-size:22px; cursor:pointer; line-height:1; color:#555; }
+  #panel .close { float:right; }
+
+  /* fiche de la carte */
+  #fiche { display:none; position:fixed; top:0; right:0; bottom:0; width:min(540px,100vw); background:#fff; border-left:1px solid #ccc; box-shadow:-6px 0 18px rgba(0,0,0,.2); z-index:20; overflow-y:auto; }
+  #fiche .fhead { position:sticky; top:0; z-index:3; background:#fff; display:flex; align-items:center; gap:10px; padding:12px 18px; border-bottom:1px solid #eee; }
+  #fiche .fbody { padding:6px 22px 40px; }
+  #fiche .stsel { font:inherit; font-weight:700; color:#2b3a9a; background:var(--accent-bg); border:0; border-radius:6px; padding:8px 12px; cursor:pointer; }
+  #fiche .fsp { flex:1; }
+  #fiche .ftitle { width:100%; font:inherit; font-size:20px; font-weight:700; border:1px solid transparent; border-radius:6px; padding:8px 8px; margin:12px -8px 4px; background:transparent; }
+  #fiche .ftitle:hover, #fiche .ftitle:focus { border-color:#ccc; background:#fff; }
+  #fiche .sec { margin:20px 0 0; }
+  #fiche .sh { display:flex; align-items:center; gap:8px; font-weight:700; font-size:14px; margin:0 0 8px; }
+  #fiche .sh .ic { width:18px; text-align:center; }
+  #fiche .sh .sub { margin-left:auto; font-weight:400; font-size:12px; color:var(--muted); }
+  #fiche .lbl { font-size:12px; color:var(--muted); margin:0 0 4px; }
+  #fiche .pills { display:flex; flex-wrap:wrap; gap:6px; }
+  #fiche .pill { font:inherit; font-weight:600; padding:5px 12px; border:2px solid #d3d7e0; border-radius:6px; background:#fff; color:#555; cursor:pointer; }
+  #fiche .pill:hover { border-color:#9aa5d8; }
+  #fiche .grid2 { display:grid; grid-template-columns:1fr 1fr; gap:18px; }
+  @media (max-width:520px){ #fiche .grid2 { grid-template-columns:1fr; } }
+  #fiche select, #fiche input[type=text], #fiche input[type=date], #fiche textarea { font:inherit; padding:7px 9px; border:1px solid #ccc; border-radius:6px; background:#fff; min-width:0; max-width:100%; }
+  #fiche textarea { width:100%; min-height:110px; resize:vertical; line-height:1.45; }
+  #fiche .row { display:flex; align-items:center; gap:8px; margin:6px 0; }
   #fiche .grow { flex:1; }
-  #fiche .cat { margin:8px 0 12px; }
-  #fiche .catl { font-size:12px; color:var(--muted); margin-bottom:4px; }
-  #fiche .ftags { display:flex; flex-wrap:wrap; gap:4px; margin-bottom:5px; min-height:4px; }
-  #fiche .btn { font:inherit; border:1px solid var(--accent); background:var(--accent); color:#fff; border-radius:4px; padding:5px 11px; cursor:pointer; }
-  #fiche .btn.light { background:#fff; color:var(--accent); }
-  .bar { height:6px; background:#e3e6ee; border-radius:3px; overflow:hidden; margin:4px 0 8px; }
-  .bar > i { display:block; height:100%; background:#17b3a3; }
-  .ci { display:flex; align-items:center; gap:7px; margin:3px 0; }
-  .ci input[type=checkbox] { width:16px; height:16px; flex:none; cursor:pointer; }
-  .ci input[type=text] { flex:1; border-color:transparent !important; padding:3px 5px !important; }
-  .ci input[type=text]:hover, .ci input[type=text]:focus { border-color:#ccc !important; }
+  #fiche .btn { font:inherit; border:1px solid var(--accent); background:var(--accent); color:#fff; border-radius:6px; padding:7px 13px; cursor:pointer; }
+  #fiche .btn.soft { background:var(--accent-bg); color:#2b3a9a; border-color:var(--accent-bg); font-weight:600; }
+  #fiche .ftags { display:flex; flex-wrap:wrap; gap:5px; margin-bottom:6px; min-height:4px; }
+  #fiche .ftags .tag { font-size:12px; padding:3px 8px; border-radius:4px; }
+  #fiche .cat { margin:0 0 14px; }
+  #fiche .none { color:#999; font-size:12px; }
+  #fiche .chips { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:6px; }
+  #fiche .chip { display:flex; align-items:center; gap:6px; background:var(--accent-bg); border-radius:14px; padding:2px 8px 2px 3px; font-size:12px; }
+  #fiche .chip .av { margin:0; border:0; width:22px; height:22px; font-size:9px; }
+  #fiche .chip .x { cursor:pointer; opacity:.5; } #fiche .chip .x:hover { opacity:1; }
+  .bar { height:7px; background:#e3e6ee; border-radius:4px; overflow:hidden; margin:2px 0 10px; }
+  .bar > i { display:block; height:100%; background:var(--accent); transition:width .2s; }
+  .ci { display:flex; align-items:center; gap:9px; margin:4px 0; }
+  .ci input[type=checkbox] { width:18px; height:18px; flex:none; cursor:pointer; accent-color:var(--accent); }
+  #fiche .ci input[type=text] { flex:1; border-color:transparent; background:transparent; padding:5px 6px; }
+  #fiche .ci input[type=text]:hover, #fiche .ci input[type=text]:focus { border-color:#ccc; background:#fff; }
   .ci.done input[type=text] { text-decoration:line-through; color:#888; }
-  .ci .del { border:0; background:none; cursor:pointer; color:#999; font-size:16px; }
+  .ci .del { border:0; background:none; cursor:pointer; color:#999; font-size:17px; }
   .ci .del:hover { color:#c00; }
+  .drop { border:2px dashed #b9c3ee; background:#f1f4ff; border-radius:8px; padding:18px; text-align:center; color:#33408f; cursor:pointer; }
+  .drop.over { background:#dfe6ff; border-color:var(--accent); }
+  .drop b { text-decoration:underline; }
+  .att { display:flex; align-items:center; gap:8px; padding:6px 8px; border:1px solid #e1e4ec; border-radius:6px; margin-bottom:6px; }
+  .att a { flex:1; color:var(--accent); text-decoration:none; cursor:pointer; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .att a:hover { text-decoration:underline; }
+  .att .sz { color:var(--muted); font-size:11px; }
+  .att .del { border:0; background:none; cursor:pointer; color:#999; font-size:17px; }
 
   #pop { display:none; position:fixed; top:80px; left:50%; transform:translateX(-50%); width:310px; background:#fff; border:1px solid #bbb; border-radius:6px; box-shadow:0 6px 24px rgba(0,0,0,.3); z-index:30; padding:12px; }
   #pop .row { display:flex; gap:6px; margin:8px 0; }
@@ -97,7 +131,7 @@
 
 <script>
 /* ============ CONFIGURATION ============ */
-const VERSION = '2026-10-30 d';   // affichée dans le bandeau bleu : permet de vérifier que le bon fichier est chargé
+const VERSION = '2026-10-30 e';   // affichée dans le bandeau bleu : permet de vérifier que le bon fichier est chargé
 const STATUTS = ['A faire','En cours','Bloqué','A valider','Terminé','Abandonné','Archivé'];
 const PRIOS   = ['P0 Critique','P1 Important','P2 Souhaitable','P3 Appréciable','Nouveau','Abandonné','Déjà prévu'];
 const CHARGES = ['XS','S','M','L','XL'];
@@ -107,8 +141,8 @@ const PRIO_COLORS   = ['#e5484d','#f5a623','#1e9ac8','#6b8fb8','#9bbf5a','#8a8f9
 const PALETTE = [['#fdf1c4','#6b5a10'],['#fcd9d9','#8a2b2b'],['#d6eef7','#1f5f78'],['#dcebd9','#355a2f'],
                  ['#e8dcf5','#59397a'],['#ffe2c9','#8a4a12'],['#d9ecec','#245f5f'],['#ffd9e8','#8a2b55']];
 const PRIO_TAG = [[/^P0/,['#fcd9d9','#b3202f']],[/^P1/,['#fff0c2','#8a5a00']],[/^P2/,['#d6eef7','#1f5f78']],[/^P3/,['#dde6f2','#3b5a80']]];
-// Catégories d'étiquettes modifiables depuis la carte (clé du widget, libellé)
-const TAG_CATS = [['etiquettes','Étiquettes'],['themes','Thèmes'],['produit','Produit'],['sources','Sources']];
+// Catégories d'étiquettes modifiables (clé du widget, libellé)
+const TAG_CATS = [['etiquettes','Étiquettes'],['personas','Personas'],['themes','Thèmes'],['produit','Produit'],['sources','Sources']];
 
 const COLS = [
   {name:'titre',        title:'Titre de la tâche',                    type:'Text'},
@@ -116,12 +150,15 @@ const COLS = [
   {name:'statut',       title:'Statut (backlog/suivi et dates)',      type:'Choice', optional:true},
   {name:'prio',         title:'Priorité',                             type:'Choice', optional:true},
   {name:'charge',       title:'Charge (XS…XL)',                       type:'Choice', optional:true},
+  {name:'personas',     title:'Personas',                             type:'Choice,ChoiceList', optional:true},
   {name:'produit',      title:'Produit',                              type:'Choice,ChoiceList', optional:true},
   {name:'themes',       title:'Thèmes',                               type:'Choice,ChoiceList', optional:true},
   {name:'sources',      title:'Sources',                              type:'Choice,ChoiceList', optional:true},
   {name:'etiquettes',   title:'Étiquettes libres (Liste de choix)',   type:'ChoiceList', optional:true},
-  {name:'personnes',    title:'Responsables (colonne texte/formule)', type:'Text,ChoiceList', optional:true},
+  {name:'responsables',title:'Responsables (colonne de RÉFÉRENCE vers Equipe)', type:'Ref,RefList', optional:true},
+  {name:'personnes',    title:'Responsables (colonne texte, si pas de référence)', type:'Text,ChoiceList', optional:true},
   {name:'echeance',     title:"Date d'échéance",                      type:'Date,DateTime', optional:true},
+  {name:'description',  title:'Description (colonne Texte)',          type:'Text', optional:true},
   {name:'checklist',    title:'Checklist (colonne Texte)',            type:'Text', optional:true},
   {name:'pj',           title:'Pièces jointes',                       type:'Attachments', optional:true},
   {name:'commentaires', title:'Nb de commentaires',                   type:'Int,Numeric', optional:true},
@@ -133,18 +170,27 @@ let mode = 'suivi';            // suivi | backlog | perso
 let moi = '';                  // nom de la personne pour le mode "perso"
 let map = null;                // association des colonnes
 let host = null;               // identifiant de la table où le widget est installé
-let records = [];              // enregistrements de la table
+let rawRecs = [];              // lignes telles que reçues de Grist
+let records = [];              // lignes converties (noms du widget)
 let index = new Map();         // id -> enregistrement
 let colors = {groups:{}, tags:{}};
+let colOrder = {};             // ordre des colonnes du Kanban, par mode
 let thr = {orange:3, red:1};
 let panelOpen = false;
 let openId = null;             // carte ouverte dans la fiche
 let ficheSig = '';             // signature de la carte affichée (évite de reconstruire la fiche inutilement)
+let metaTick = 0;              // change quand les métadonnées arrivent (reconstruit la fiche)
+let meta = {};                 // clé du widget -> {col, type, choices}
+let metaSig = '';
+let team = [];                 // [{id, label}] : table référencée par "Responsables"
+let teamById = {};
+let attMeta = {};              // id de pièce jointe -> {name, size}
+let uploading = false;
 let rawFirst = null;
-let nCalls = 0, lastCall = '';   // diagnostic : nombre d'appels onRecords
-let diagOpen = false, tableCount = null;
+let nCalls = 0, lastCall = '';   // diagnostic
+let diagOpen = false, tableCount = null, metaNote = '';
 let focusAfter = null;         // champ à refocaliser après reconstruction de la fiche
-const F = {prio:'',charge:'',theme:'',personne:'',produit:'',source:'',etiquette:'',from:'',to:'',q:''};
+const F = {prio:'',charge:'',persona:'',theme:'',personne:'',produit:'',source:'',etiquette:'',from:'',to:'',q:''};
 
 /* ============ OUTILS ============ */
 const esc = s => String(s ?? '').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -152,6 +198,11 @@ function toList(v){
   if (v == null || v === '') return [];
   if (Array.isArray(v)) return (v[0]==='L' ? v.slice(1) : v).map(String).filter(Boolean);
   return String(v).split(',').map(s=>s.trim()).filter(x=>x && x!=='[]');
+}
+function refIds(v){   // identifiants de lignes d'une colonne Référence / Liste de références
+  if (v == null || v === '' || v === 0) return [];
+  const arr = Array.isArray(v) ? (v[0]==='L' ? v.slice(1) : v) : [v];
+  return arr.map(x=> (x && typeof x==='object') ? (x.rowId ?? x.id) : x).filter(x=>typeof x==='number' && x>0);
 }
 function hash(s){ let h=0; for (const c of String(s)) h=(h*31+c.charCodeAt(0))|0; return Math.abs(h); }
 function rgb(hex){ const n=parseInt(hex.slice(1),16); return [n>>16&255,n>>8&255,n&255]; }
@@ -162,14 +213,16 @@ function defaultTagColors(label,kind){
   if (kind==='prio') for (const [re,col] of PRIO_TAG) if (re.test(label)) return col;
   return PALETTE[hash(label)%PALETTE.length];
 }
+function tagColors(label,kind){
+  if (colors.tags[label]) return [lighten(colors.tags[label],.8), darken(colors.tags[label],.45)];
+  return defaultTagColors(label,kind);
+}
 function tag(label, kind){
-  let c = null;
-  if (colors.tags[label]) c = [lighten(colors.tags[label],.8), darken(colors.tags[label],.45)];
-  if (!c) c = defaultTagColors(label,kind);
+  const c = tagColors(label,kind);
   return `<span class="tag" style="background:${c[0]};color:${c[1]}">${esc(label)}</span>`;
 }
 function tagX(label, key){
-  return tag(label).replace(/<\/span>$/, `<span class="x" data-rm="${key}" data-val="${esc(label)}" title="Retirer cette étiquette">×</span></span>`);
+  return tag(label).replace(/<\/span>$/, `<span class="x" data-rm="${key}" data-val="${esc(label)}" title="Retirer">×</span></span>`);
 }
 function toDate(v){
   if (v == null || v === '') return null;
@@ -179,16 +232,27 @@ function toDate(v){
 function dayStart(d){ const x=new Date(d); x.setHours(0,0,0,0); return x; }
 function fmtDate(d){ return d.toLocaleDateString('fr-FR',{day:'numeric',month:'short'}); }
 function initials(n){ return n.split(/\s+/).filter(Boolean).map(w=>w[0]).join('').slice(0,2).toUpperCase(); }
+function fmtSize(n){ if(!n) return ''; return n>1048576 ? (n/1048576).toFixed(1)+' Mo' : Math.max(1,Math.round(n/1024))+' Ko'; }
 function g(r,k){ return map && map[k] ? r[k] : undefined; }
+
 // Grist peut envoyer les lignes avec les noms réels des colonnes (Titre, Statut…) ou déjà renommées (titre, groupe…).
 // On les ramène toujours aux noms du widget.
 function normalize(rec){
   const out = {id: rec.id};
   for (const k in map){
-    const c = map[k]; if (!c) continue;
+    const c = map[k]; if (!c || c[0]==='@') continue;
     out[k] = (c in rec) ? rec[c] : rec[k];
   }
+  derive(out);
   return out;
+}
+function derive(r){   // noms des responsables, à partir de la colonne de référence
+  if (map && map.responsables && teamById && Object.keys(teamById).length)
+    r.personnes = refIds(r.responsables).map(id=>teamById[id] || ('#'+id)).join(', ');
+}
+function ingest(){
+  records = (rawRecs && map) ? rawRecs.map(normalize) : [];
+  render();
 }
 
 /* ---- Checklist : texte, une ligne par point "- [ ] à faire" / "- [x] fait" ---- */
@@ -204,6 +268,54 @@ function checklistCount(t){
   return {done: items.filter(x=>x.done).length, total: items.length};
 }
 
+/* ============ MÉTADONNÉES DES COLONNES (choix possibles, table des responsables) ============ */
+async function loadMeta(){
+  meta = {}; team = []; teamById = {}; metaNote = '';
+  try {
+    const T = await grist.docApi.fetchTable('_grist_Tables');
+    const C = await grist.docApi.fetchTable('_grist_Tables_column');
+    const ti = T.id[T.tableId.indexOf(host)];
+    const colById = {}; C.id.forEach((id,i)=>{ colById[id] = C.colId[i]; });
+    const cols = {};
+    C.id.forEach((id,i)=>{ if (C.parentId[i]===ti) cols[C.colId[i]] = {type:C.type[i], wo:C.widgetOptions[i], vis:C.visibleCol[i]}; });
+    for (const k in map){
+      const c = map[k]; if (!c || c[0]==='@' || !cols[c]) continue;
+      let choices = []; try { choices = (JSON.parse(cols[c].wo||'{}').choices) || []; } catch(e){}
+      const m = String(cols[c].type).match(/^Ref(?:List)?:(.+)$/);
+      meta[k] = {col:c, type:String(cols[c].type), choices, ref: m ? m[1] : null, visCol: cols[c].vis ? colById[cols[c].vis] : null};
+    }
+    if (meta.responsables && meta.responsables.ref){
+      const tbl = meta.responsables.ref;
+      const E = await grist.docApi.fetchTable(tbl);
+      let lab = meta.responsables.visCol;
+      if (!lab || !(lab in E)) lab = ['Nom','nom','NOM','Name','name','Titre'].find(x=>x in E) || Object.keys(E).find(x=>!/^(id|manualSort|gristHelper_)/.test(x));
+      (E.id||[]).forEach((id,i)=>{ const label = String(E[lab] ? E[lab][i] : '').trim(); if (label) { team.push({id, label}); teamById[id] = label; } });
+      team.sort((a,b)=>a.label.localeCompare(b.label,'fr'));
+      metaNote = `table des responsables « ${tbl} » (colonne « ${lab} ») : ${team.length} personne(s)`;
+    }
+  } catch(e){ metaNote = 'métadonnées indisponibles : '+((e&&e.message)||e); }
+  metaTick++;
+}
+async function ensureMeta(){
+  const sig = host+'|'+JSON.stringify(map);
+  if (!host || !map || sig===metaSig) return;
+  metaSig = sig;
+  await loadMeta();
+  ingest();
+}
+function choicesFor(k, fallback=[]){
+  const base = (meta[k] && meta[k].choices && meta[k].choices.length) ? meta[k].choices : fallback;
+  const used = [...new Set(records.flatMap(r=>toList(g(r,k))))];
+  return [...new Set([...base.map(String), ...used])];
+}
+async function loadAttachMeta(){
+  try {
+    const A = await grist.docApi.fetchTable('_grist_Attachments');
+    attMeta = {}; (A.id||[]).forEach((id,i)=>{ attMeta[id] = {name:A.fileName ? A.fileName[i] : ('Fichier '+id), size:A.fileSize ? A.fileSize[i] : 0}; });
+  } catch(e){}
+  metaTick++; ficheSig=''; renderFiche();
+}
+
 /* ============ ÉCRITURE DANS GRIST ============ */
 // Met à jour la carte tout de suite à l'écran (optimiste), puis écrit dans Grist.
 // changes : {cléWidget: valeur affichée} ; encoded : {cléWidget: valeur envoyée à Grist} (listes : ['L', ...])
@@ -215,6 +327,7 @@ async function update(card, changes, encoded){
     cols[map[k]] = (encoded && k in encoded) ? encoded[k] : changes[k];
   }
   if (!Object.keys(cols).length) return;
+  derive(card);
   render();
   await act([['UpdateRecord', host, card.id, cols]]);
 }
@@ -224,14 +337,28 @@ async function act(actions){
   catch(e){ alert('Action refusée ou impossible : ' + ((e && e.message) || e)); }
 }
 
-/* ============ FILTRAGE ============ */
+/* ============ COLONNES DU KANBAN (ordre modifiable) ============ */
 function groupList(){
   const base = mode==='backlog' ? PRIOS : STATUTS;
   const defaults = mode==='backlog' ? PRIO_COLORS : STATUT_COLORS;
   const seen = new Set(base);
   const extra = [...new Set(records.map(r=>r.groupe).filter(v=>v && !seen.has(v)))];
-  return [...base,...extra].map((n,i)=>({name:n,color:colors.groups[n]||defaults[i]||'#999'}));
+  const all = [...base,...extra];
+  const ord = colOrder[mode] || [];
+  const rank = n => { const i = ord.indexOf(n); return i>=0 ? i : 1000 + all.indexOf(n); };
+  return all.map((n,i)=>({name:n, color:colors.groups[n]||defaults[i]||'#999'})).sort((a,b)=>rank(a.name)-rank(b.name));
 }
+function moveColumn(from, to){
+  if (!from || !to || from===to) return;
+  const names = groupList().map(x=>x.name);
+  const fi = names.indexOf(from); if (fi<0) return;
+  names.splice(fi,1);
+  const ti = names.indexOf(to);
+  names.splice(fi < groupList().map(x=>x.name).indexOf(to) ? ti+1 : ti, 0, from);
+  colOrder[mode] = names; grist.setOption('order', colOrder); render();
+}
+
+/* ============ FILTRAGE ============ */
 // Règle Backlog / Suivi : un Statut renseigné = Suivi ; pas de Statut = Backlog
 function inView(r){
   if (!map.statut) return true;
@@ -245,6 +372,7 @@ function passes(r){
   if (who && !l('personnes').includes(who)) return false;
   if (F.prio && g(r,'prio') !== F.prio) return false;
   if (F.charge && g(r,'charge') !== F.charge) return false;
+  if (F.persona && !l('personas').includes(F.persona)) return false;
   if (F.theme && !l('themes').includes(F.theme)) return false;
   if (F.produit && !l('produit').includes(F.produit)) return false;
   if (F.source && !l('sources').includes(F.source)) return false;
@@ -255,7 +383,7 @@ function passes(r){
     if (F.to && dayStart(d) > dayStart(F.to)) return false;
   }
   if (F.q){
-    const hay = [r.titre,...l('themes'),...l('sources'),...l('produit'),...l('etiquettes'),...l('personnes'),g(r,'checklist')].join(' ').toLowerCase();
+    const hay = [r.titre,g(r,'description'),...l('personas'),...l('themes'),...l('sources'),...l('produit'),...l('etiquettes'),...l('personnes'),g(r,'checklist')].join(' ').toLowerCase();
     if (!hay.includes(F.q.toLowerCase())) return false;
   }
   return true;
@@ -274,6 +402,7 @@ function renderHeader(){
       <option value="perso" ${mode==='perso'?'selected':''}>Mes tâches</option></select></label>`;
   if (mode!=='backlog' && has('prio')) h += sel('f-prio','Prio',uniqSingle('prio'),F.prio);
   if (has('charge')) h += sel('f-charge','Charge',uniqSingle('charge'),F.charge);
+  if (has('personas')) h += sel('f-persona','Persona',uniq('personas'),F.persona);
   if (has('themes')) h += sel('f-theme','Thème',uniq('themes'),F.theme);
   if (has('personnes')) h += sel('f-personne', mode==='perso'?'Moi':'Personne', uniq('personnes'), mode==='perso'?moi:F.personne);
   if (has('produit')) h += sel('f-produit','Produit',uniq('produit'),F.produit);
@@ -285,7 +414,7 @@ function renderHeader(){
   document.getElementById('hdr').innerHTML = h;
 
   const bind = (id,key) => { const e=document.getElementById(id); if(e) e.onchange = ()=>{F[key]=e.value; render();}; };
-  bind('f-prio','prio'); bind('f-charge','charge'); bind('f-theme','theme');
+  bind('f-prio','prio'); bind('f-charge','charge'); bind('f-persona','persona'); bind('f-theme','theme');
   bind('f-produit','produit'); bind('f-source','source'); bind('f-etiquette','etiquette'); bind('f-from','from'); bind('f-to','to');
   const fp = document.getElementById('f-personne');
   if (fp) fp.onchange = ()=>{ if(mode==='perso'){ moi=fp.value; grist.setOption('moi',moi); } else F.personne=fp.value; render(); };
@@ -329,23 +458,24 @@ function cardHtml(r){
   if (mode!=='backlog' && g(r,'prio')) tags += tag(g(r,'prio'),'prio');
   if (g(r,'charge')) tags += tag(g(r,'charge'));
   l('etiquettes').forEach(t=>tags+=tagX(t,'etiquettes'));
+  l('personas').forEach(t=>tags+=tagX(t,'personas'));
   l('produit').forEach(t=>tags+=tagX(t,'produit'));
   l('themes').forEach(t=>tags+=tagX(t,'themes'));
   l('sources').forEach(t=>tags+=tagX(t,'sources'));
   tags += `<span class="addtag" data-addtag="1" title="Ajouter une étiquette">+ étiquette</span>`;
-  let meta = dateBadge(r);
+  let meta_ = dateBadge(r);
   const cl = checklistCount(g(r,'checklist'));
-  if (cl.total) meta += `<span>☑ ${cl.done}/${cl.total}</span>`;
-  const pj = toList(g(r,'pj')).length; if (pj) meta += `<span>📎${pj}</span>`;
-  if (mode!=='backlog' && map.commentaires && g(r,'commentaires')) meta += `<span>🗨️${g(r,'commentaires')}</span>`;
-  if (mode==='backlog' && map.votes) meta += `<button class="vote" data-vote="1">👍 ${g(r,'votes')||0}</button>`;
-  if (mode==='backlog' && map.statut) meta += `<button class="tosuivi" data-tosuivi="1" title="Passer dans le suivi (statut A faire)">➜ Suivi</button>`;
-  if (mode!=='backlog' && map.statut && g(r,'statut')==='A faire') meta += `<button class="tobacklog" data-tobacklog="1" title="Remettre dans le backlog (statut vidé)">⬅ Backlog</button>`;
+  if (cl.total) meta_ += `<span>☑ ${cl.done}/${cl.total}</span>`;
+  const pj = refIds(g(r,'pj')).length; if (pj) meta_ += `<span>📎${pj}</span>`;
+  if (mode!=='backlog' && map.commentaires && g(r,'commentaires')) meta_ += `<span>🗨️${g(r,'commentaires')}</span>`;
+  if (mode==='backlog' && map.votes) meta_ += `<button class="vote" data-vote="1">👍 ${g(r,'votes')||0}</button>`;
+  if (mode==='backlog' && map.statut) meta_ += `<button class="tosuivi" data-tosuivi="1" title="Passer dans le suivi (statut A faire)">➜ Suivi</button>`;
+  if (mode!=='backlog' && map.statut && g(r,'statut')==='A faire') meta_ += `<button class="tobacklog" data-tobacklog="1" title="Remettre dans le backlog (statut vidé)">⬅ Backlog</button>`;
   const av = l('personnes').map(n=>`<div class="av" title="${esc(n)}">${esc(initials(n))}</div>`).join('');
   return `<div class="card${r.id===openId?' open':''}" draggable="true" data-id="${r.id}">
     <div class="tags">${tags}</div>
     <div class="title">${esc(r.titre)||'<i>(sans titre)</i>'}</div>
-    <div class="meta">${meta}<div class="avatars">${av}</div></div></div>`;
+    <div class="meta">${meta_}<div class="avatars">${av}</div></div></div>`;
 }
 function renderBoard(){
   const board = document.getElementById('board');
@@ -357,23 +487,27 @@ function renderBoard(){
       return (da?+da:9e15)-(db?+db:9e15);
     });
     return `<div class="col" data-group="${esc(gr.name)}">
-      <h2><span class="dot" style="background:${gr.color}"></span>${esc(gr.name)}<span class="count">${cards.length}</span></h2>
+      <h2 draggable="true" data-colh="${esc(gr.name)}" title="Glisser pour déplacer la colonne"><span class="grip">⋮⋮</span><span class="dot" style="background:${gr.color}"></span>${esc(gr.name)}<span class="count">${cards.length}</span></h2>
       ${cards.map(cardHtml).join('')}
       <button class="add" data-add="${esc(gr.name)}">+ Nouvelle carte</button></div>`;
   }).join('');
   wire();
 }
+function render(){
+  try { rebuild(); renderHeader(); renderWarn(); renderBoard(); renderPanel(); renderFiche(); renderDiag(); document.getElementById('err').innerHTML=''; }
+  catch(e){ showError(e); }
+}
+function rebuild(){ index = new Map(records.map(r=>[r.id,r])); }
 function showError(e){
   const el = document.getElementById('err'); if (!el) return;
   const msg = (e && (e.stack || e.message)) || String(e);
   el.innerHTML = `<div class="err"><b>Erreur dans le widget</b> (copiez ce texte et envoyez-le) :<br><code>${esc(msg).slice(0,700)}</code></div>`;
 }
-function render(){
-  try { rebuild(); renderHeader(); renderWarn(); renderBoard(); renderPanel(); renderFiche(); renderDiag(); document.getElementById('err').innerHTML=''; }
-  catch(e){ showError(e); }
-}
 window.addEventListener('error', e=>showError(e.error||e.message));
 window.addEventListener('unhandledrejection', e=>showError(e.reason));
+// évite que le navigateur ouvre un fichier lâché en dehors de la zone prévue
+window.addEventListener('dragover', e=>{ if (e.dataTransfer && [...(e.dataTransfer.types||[])].includes('Files')) e.preventDefault(); });
+window.addEventListener('drop', e=>{ if (e.dataTransfer && [...(e.dataTransfer.types||[])].includes('Files')) e.preventDefault(); });
 
 /* ---- Diagnostic ---- */
 async function loadTableCount(){
@@ -394,12 +528,13 @@ function renderDiag(){
     'Lignes reçues de Grist : '+records.length,
     'Lignes dans la table (tous filtres ignorés) : '+tableCount,
     'Association des colonnes : '+JSON.stringify(map),
+    'Types des colonnes : '+JSON.stringify(Object.fromEntries(Object.entries(meta).map(([k,v])=>[k,v.type]))),
+    'Métadonnées : '+(metaNote||'(aucune remarque)'),
     'Cartes affichables dans cette vue : '+(map?records.filter(passes).length:'?'),
     'Première ligne reçue (brute) : '+(rawFirst?JSON.stringify(rawFirst):'(aucune)').slice(0,500),
     'Première ligne après conversion : '+first.slice(0,500),
   ].join('\n');
 }
-function rebuild(){ index = new Map(records.map(r=>[r.id,r])); }
 
 /* ---- Panneau de personnalisation des couleurs ---- */
 function saveColors(){ grist.setOption('colors', colors); }
@@ -414,7 +549,9 @@ function renderPanel(){
   ].filter(Boolean))].sort((a,b)=>a.localeCompare(b,'fr'));
   p.innerHTML = `<button class="close" id="pclose">×</button><b>Personnalisation</b>
     <h3>Colonnes du Kanban</h3>
+    <div class="hint" style="font-size:11px;color:#666">Pour changer l'ordre, faites glisser le titre d'une colonne.</div>
     ${groups.map(gr=>`<div class="row"><input type="color" data-grp="${esc(gr.name)}" value="${gr.color.length===7?gr.color:'#999999'}"> ${esc(gr.name)}</div>`).join('')}
+    <div class="row"><button id="oreset">Rétablir l'ordre d'origine</button></div>
     <h3>Étiquettes (couleur de base : le fond est éclairci automatiquement)</h3>
     ${tagVals.map(v=>`<div class="row"><input type="color" data-tag="${esc(v)}" value="${colors.tags[v]||defaultTagColors(v,'')[1]}"> ${tag(v)}</div>`).join('')}
     <h3>Alertes d'échéance</h3>
@@ -430,6 +567,7 @@ function renderPanel(){
     i.oninput = ()=>{ colors.tags[i.dataset.tag]=i.value; renderBoard(); };
     i.onchange = ()=>{ saveColors(); renderPanel(); };
   });
+  document.getElementById('oreset').onclick = ()=>{ delete colOrder[mode]; grist.setOption('order', colOrder); render(); };
   document.getElementById('t-orange').onchange = e=>{ thr.orange=+e.target.value; grist.setOption('orange',thr.orange); renderBoard(); };
   document.getElementById('t-red').onchange = e=>{ thr.red=+e.target.value; grist.setOption('red',thr.red); renderBoard(); };
   document.getElementById('creset').onclick = ()=>{ colors={groups:{},tags:{}}; saveColors(); render(); };
@@ -437,6 +575,7 @@ function renderPanel(){
 
 /* ============ ÉTIQUETTES ============ */
 function isListCol(key){
+  if (meta[key] && meta[key].type) return /^ChoiceList/.test(meta[key].type);
   const vals = records.map(r=>g(r,key)).filter(v=>v!=null && v!=='');
   return vals.length===0 || vals.some(v=>Array.isArray(v));
 }
@@ -461,16 +600,25 @@ function openTagPop(card){
   const cats = TAG_CATS.filter(([k])=>map[k]);
   openPop(`<b>Ajouter une étiquette</b>
     <div class="row"><select id="pc">${cats.map(([k,n])=>`<option value="${k}">${n}</option>`).join('')}</select></div>
-    <div class="row"><input id="pv" list="pl" placeholder="Choisir ou taper un nouveau nom…" autocomplete="off"><datalist id="pl"></datalist></div>
-    <div class="hint">Un nom qui n'existe pas encore est créé automatiquement.</div>
+    <div class="row"><select id="pv"></select></div>
+    <div class="row" id="pnew" style="display:none"><input id="pn" placeholder="Nouveau nom…" autocomplete="off"></div>
     <div class="row" style="justify-content:flex-end"><button id="pcancel">Annuler</button><button class="primary" id="pok">Ajouter</button></div>`);
-  const fill = ()=>{ document.getElementById('pl').innerHTML = uniq(document.getElementById('pc').value).map(v=>`<option value="${esc(v)}">`).join(''); };
+  const fill = ()=>{
+    const k = document.getElementById('pc').value;
+    const cur = toList(g(card,k));
+    document.getElementById('pv').innerHTML = choicesFor(k).filter(v=>!cur.includes(v)).map(v=>`<option>${esc(v)}</option>`).join('') + '<option value="__new">➕ Nouvelle valeur…</option>';
+    document.getElementById('pnew').style.display = 'none';
+  };
   document.getElementById('pc').onchange = fill; fill();
-  const ok = ()=>{ const v=document.getElementById('pv').value; const k=document.getElementById('pc').value; closePop(); addTag(card,k,v); };
+  document.getElementById('pv').onchange = e=>{ const n=document.getElementById('pnew'); n.style.display = e.target.value==='__new' ? 'flex' : 'none'; if(e.target.value==='__new') document.getElementById('pn').focus(); };
+  const ok = ()=>{
+    const k=document.getElementById('pc').value; let v=document.getElementById('pv').value;
+    if (v==='__new') v = document.getElementById('pn').value;
+    closePop(); addTag(card,k,v);
+  };
   document.getElementById('pok').onclick = ok;
   document.getElementById('pcancel').onclick = closePop;
-  document.getElementById('pv').onkeydown = e=>{ if(e.key==='Enter') ok(); if(e.key==='Escape') closePop(); };
-  document.getElementById('pv').focus();
+  document.getElementById('pn').onkeydown = e=>{ if(e.key==='Enter') ok(); if(e.key==='Escape') closePop(); };
 }
 function openNewPop(group){
   openPop(`<b>Nouvelle carte</b> <span class="hint">(${esc(group)})</span>
@@ -487,11 +635,44 @@ function openNewPop(group){
   document.getElementById('nt').focus();
 }
 
-/* ============ FICHE DE LA CARTE (titre, étiquettes, checklist) ============ */
-function openFiche(id){ openId = id; panelOpen = false; ficheSig = ''; render(); }
+/* ============ PIÈCES JOINTES ============ */
+async function uploadFiles(card, files){
+  files = [...files]; if (!files.length) return;
+  uploading = true; ficheSig=''; renderFiche();
+  try {
+    const tok = await grist.docApi.getAccessToken({readOnly:false});
+    const fd = new FormData(); files.forEach(f=>fd.append('upload', f, f.name));
+    const res = await fetch(`${tok.baseUrl}/attachments?auth=${encodeURIComponent(tok.token)}`, {method:'POST', body:fd});
+    if (!res.ok) throw new Error('envoi refusé (code '+res.status+')');
+    const ids = (await res.json()).filter(x=>typeof x==='number');
+    const cur = refIds(g(card,'pj'));
+    await loadAttachMeta();
+    const all = [...new Set([...cur,...ids])];
+    await update(card, {pj:all}, {pj:['L',...all]});
+  } catch(e){ alert("Envoi de la pièce jointe impossible : "+((e&&e.message)||e)); }
+  uploading = false; ficheSig=''; renderFiche();
+}
+async function downloadAttachment(id){
+  try {
+    const tok = await grist.docApi.getAccessToken({readOnly:true});
+    const a = document.createElement('a');
+    a.href = `${tok.baseUrl}/attachments/${id}/download?auth=${encodeURIComponent(tok.token)}`; a.target='_blank'; a.rel='noopener';
+    document.body.appendChild(a); a.click(); a.remove();
+  } catch(e){ alert("Ouverture impossible : "+((e&&e.message)||e)); }
+}
+
+/* ============ FICHE DE LA CARTE ============ */
+function openFiche(id){ openId = id; panelOpen = false; ficheSig = ''; if (map && map.pj) loadAttachMeta(); render(); }
 function closeFiche(){ if (openId===null) return; openId = null; ficheSig = ''; document.getElementById('fiche').style.display='none'; renderBoard(); }
 function sigOf(r){
-  return JSON.stringify([r.titre, r.groupe, g(r,'prio'), g(r,'charge'), g(r,'checklist'), ...TAG_CATS.map(([k])=>toList(g(r,k)))]);
+  return JSON.stringify([metaTick, uploading, r.titre, r.groupe, g(r,'statut'), g(r,'prio'), g(r,'charge'), g(r,'description'), g(r,'checklist'), g(r,'echeance'), g(r,'responsables'), g(r,'pj'),
+    ...TAG_CATS.map(([k])=>toList(g(r,k)))]);
+}
+function pillsHtml(key, values, current){
+  return `<div class="pills">${values.map(v=>{
+    const on = v===current, c = tagColors(v, key==='prio'?'prio':'');
+    return `<button class="pill" data-pill="${key}" data-val="${esc(v)}" style="${on?`background:${c[0]};color:${c[1]};border-color:${c[1]}`:''}">${esc(v)}</button>`;
+  }).join('')}</div>`;
 }
 function renderFiche(){
   const f = document.getElementById('fiche');
@@ -501,44 +682,120 @@ function renderFiche(){
   const sig = sigOf(r);
   if (sig===ficheSig && f.innerHTML) return;            // rien n'a changé : on ne touche pas à la saisie en cours
   ficheSig = sig;
+  const keepScroll = f.scrollTop;
 
-  const cats = TAG_CATS.filter(([k])=>map[k]).map(([k,n])=>`
-    <div class="cat">
-      <div class="catl">${n}</div>
-      <div class="ftags">${toList(g(r,k)).map(t=>tagX(t,k)).join('') || '<span class="catl">aucune</span>'}</div>
-      <div class="row"><input type="text" class="grow" id="ta-${k}" list="dl-${k}" placeholder="Ajouter ou créer…" autocomplete="off">
-        <datalist id="dl-${k}">${uniq(k).filter(v=>!toList(g(r,k)).includes(v)).map(v=>`<option value="${esc(v)}">`).join('')}</datalist>
-        <button class="btn" data-fadd="${k}" title="Ajouter">+</button></div>
-    </div>`).join('');
+  /* en-tête : statut */
+  let statut = '';
+  if (map.statut){
+    const vals = choicesFor('statut', STATUTS);
+    statut = `<select class="stsel" id="fp-statut"><option value="">Backlog (sans statut)</option>${vals.map(v=>`<option ${v===g(r,'statut')?'selected':''}>${esc(v)}</option>`).join('')}</select>`;
+  } else statut = `<span class="stsel">${esc(r.groupe||'—')}</span>`;
 
-  let checklist;
-  if (!map.checklist) checklist = `<div class="catl">Associez une colonne <b>Texte</b> au champ « Checklist » dans la configuration du widget pour activer la checklist.</div>`;
+  /* priorité / charge en pastilles */
+  let chips = '';
+  if (map.prio) chips += `<div class="sec"><div class="lbl">Priorité</div>${pillsHtml('prio', choicesFor('prio',PRIOS), g(r,'prio'))}</div>`;
+  if (map.charge) chips += `<div class="sec"><div class="lbl">Charge de travail</div>${pillsHtml('charge', choicesFor('charge',CHARGES), g(r,'charge'))}</div>`;
+
+  /* responsables */
+  let resp;
+  if (map.responsables){
+    const ids = refIds(r.responsables);
+    const avail = team.filter(t=>!ids.includes(t.id));
+    resp = `<div class="chips">${ids.map(id=>`<span class="chip"><span class="av">${esc(initials(teamById[id]||'?'))}</span>${esc(teamById[id]||('#'+id))}<span class="x" data-rmresp="${id}" title="Retirer">×</span></span>`).join('') || '<span class="none">personne</span>'}</div>
+      ${team.length ? `<select id="fp-resp" style="width:100%"><option value="">+ Ajouter un responsable…</option>${avail.map(t=>`<option value="${t.id}">${esc(t.label)}</option>`).join('')}</select>` : `<div class="none">Liste des personnes indisponible (${esc(metaNote||'chargement…')}).</div>`}`;
+  } else if (map.personnes){
+    resp = `<div class="chips">${toList(r.personnes).map(n=>`<span class="chip"><span class="av">${esc(initials(n))}</span>${esc(n)}</span>`).join('') || '<span class="none">personne</span>'}</div>
+      <div class="none">Pour modifier : associez votre colonne de <b>référence</b> au champ « Responsables (colonne de RÉFÉRENCE) » du widget.</div>`;
+  } else resp = '<div class="none">Champ « Responsables » non associé.</div>';
+
+  /* échéance */
+  let ech = '';
+  if (map.echeance){
+    const d = toDate(g(r,'echeance'));
+    const editable = meta.echeance && meta.echeance.type==='Date';
+    ech = `<div><div class="sh"><span class="ic">📅</span>Échéance</div>
+      ${editable ? `<div class="row"><input type="date" id="fp-date" value="${d?d.toISOString().slice(0,10):''}"> ${d?`<button class="btn soft" id="fp-dateclr" title="Effacer">×</button>`:''}</div>`
+                 : `<div class="row">${d?esc(d.toLocaleString('fr-FR')):'<span class="none">aucune</span>'}</div><div class="none">Modification possible si la colonne est de type « Date » (pas « Date et heure »).</div>`}
+      <div class="row">${dateBadge(r)}</div></div>`;
+  }
+
+  /* étiquettes : une liste déroulante par catégorie */
+  const cats = TAG_CATS.filter(([k])=>map[k]).map(([k,n])=>{
+    const cur = toList(g(r,k));
+    const options = choicesFor(k).filter(v=>!cur.includes(v));
+    return `<div class="cat"><div class="lbl">${n}</div>
+      <div class="ftags">${cur.map(t=>tagX(t,k)).join('') || '<span class="none">aucune</span>'}</div>
+      <div class="row"><select class="grow" data-addsel="${k}"><option value="">+ Ajouter…</option>${options.map(v=>`<option>${esc(v)}</option>`).join('')}<option value="__new">➕ Nouvelle valeur…</option></select></div>
+      <div class="row" id="nr-${k}" style="display:none"><input type="text" class="grow" id="ta-${k}" placeholder="Nouvelle valeur…" autocomplete="off"><button class="btn" data-fadd="${k}">Ajouter</button></div>
+    </div>`;
+  }).join('');
+
+  /* description */
+  const desc = map.description ? `<div class="sec"><div class="sh"><span class="ic">📝</span>Description</div>
+    <textarea id="fp-desc" placeholder="Ajouter une description plus détaillée…">${esc(g(r,'description')||'')}</textarea></div>` : '';
+
+  /* checklist */
+  let checklist = '';
+  if (!map.checklist) checklist = `<div class="none">Associez une colonne <b>Texte</b> au champ « Checklist » du widget pour activer la checklist.</div>`;
   else {
     const {items} = parseChecklist(g(r,'checklist'));
     const done = items.filter(x=>x.done).length;
-    checklist = `${items.length?`<div class="catl">${done}/${items.length} fait(s)</div><div class="bar"><i style="width:${Math.round(100*done/items.length)}%"></i></div>`:''}
+    checklist = `${items.length?`<div class="bar"><i style="width:${Math.round(100*done/items.length)}%"></i></div>`:''}
       ${items.map(x=>`<div class="ci${x.done?' done':''}"><input type="checkbox" data-cl-toggle="${x.i}" ${x.done?'checked':''}>
         <input type="text" data-cl-text="${x.i}" value="${esc(x.text)}"><button class="del" data-cl-del="${x.i}" title="Supprimer ce point">×</button></div>`).join('')}
-      <div class="row"><input type="text" class="grow" id="cl-add" placeholder="Ajouter un point…" autocomplete="off"><button class="btn" id="cl-addbtn" title="Ajouter">+</button></div>`;
+      <div class="row"><input type="text" class="grow" id="cl-add" placeholder="Ajouter une tâche…" autocomplete="off"><button class="btn soft" id="cl-addbtn">+ Ajouter</button></div>`;
+  }
+  const clCount = map.checklist ? checklistCount(g(r,'checklist')) : {done:0,total:0};
+
+  /* pièces jointes */
+  let pj = '';
+  if (map.pj){
+    const ids = refIds(g(r,'pj'));
+    pj = `<div class="sec"><div class="sh"><span class="ic">📎</span>Pièces jointes<span class="sub">${ids.length||''}</span></div>
+      ${ids.map(id=>`<div class="att"><span>📄</span><a data-dl="${id}" title="Ouvrir">${esc((attMeta[id]&&attMeta[id].name)||('Fichier '+id))}</a><span class="sz">${fmtSize(attMeta[id]&&attMeta[id].size)}</span><button class="del" data-rmatt="${id}" title="Retirer de la carte">×</button></div>`).join('')}
+      <div class="drop" id="fp-drop">${uploading?'Envoi en cours…':'<b>Glisser-déposer</b> un fichier ici<br>ou <b>cliquer pour le choisir</b>'}</div>
+      <input type="file" id="fp-file" multiple style="display:none"></div>`;
   }
 
-  const sel = (id, label, arr, val) => `<div class="grow"><div class="catl">${label}</div><select id="${id}" style="width:100%"><option value="">—</option>${arr.map(v=>`<option ${v===val?'selected':''}>${esc(v)}</option>`).join('')}</select></div>`;
-  f.innerHTML = `<button class="close" id="fclose" title="Fermer">×</button>
-    <div class="catl">Fiche de la carte</div>
-    <input type="text" class="ftitle" id="f-title" value="${esc(r.titre)}" placeholder="Titre de la tâche">
-    ${(map.prio||map.charge)?`<div class="row" style="margin-top:12px">${map.prio?sel('fp-prio','Priorité',uniqSingle('prio',PRIOS),g(r,'prio')):''}${map.charge?sel('fp-charge','Charge',uniqSingle('charge',CHARGES),g(r,'charge')):''}</div>`:''}
-    <h3>Étiquettes</h3>${cats || '<div class="catl">Associez au moins une colonne Étiquettes, Thèmes, Produit ou Sources.</div>'}
-    <h3>Checklist</h3>${checklist}`;
+  f.innerHTML = `<div class="fhead">${statut}<span class="fsp"></span><button class="close" id="fclose" title="Fermer (Échap)">×</button></div>
+    <div class="fbody">
+      <input type="text" class="ftitle" id="f-title" value="${esc(r.titre)}" placeholder="Titre de la tâche">
+      ${chips}
+      <div class="sec grid2"><div><div class="sh"><span class="ic">👤</span>Responsables</div>${resp}</div>${ech}</div>
+      <div class="sec"><div class="sh"><span class="ic">🏷</span>Étiquettes</div>${cats || '<div class="none">Associez au moins une colonne Étiquettes, Personas, Thèmes, Produit ou Sources.</div>'}</div>
+      ${desc}
+      <div class="sec"><div class="sh"><span class="ic">☑</span>Tâches${clCount.total?`<span class="sub">${clCount.done}/${clCount.total}</span>`:''}</div>${checklist}</div>
+      ${pj}
+    </div>`;
+  f.scrollTop = keepScroll;
 
-  // --- branchements ---
+  /* --- branchements --- */
   document.getElementById('fclose').onclick = closeFiche;
   document.getElementById('f-title').onchange = e=>{ const v=e.target.value.trim(); if (v!==r.titre) update(r,{titre:v}); };
-  const fp = document.getElementById('fp-prio'); if (fp) fp.onchange = ()=>update(r,{prio:fp.value||null});
-  const fc = document.getElementById('fp-charge'); if (fc) fc.onchange = ()=>update(r,{charge:fc.value||null});
+  const st = document.getElementById('fp-statut');
+  if (st) st.onchange = ()=>{ const v = st.value || null; update(r, map.groupe===map.statut ? {statut:v, groupe:v} : {statut:v}); };
+  f.querySelectorAll('[data-pill]').forEach(b=>b.onclick=()=>{ const k=b.dataset.pill; update(r,{[k]: g(r,k)===b.dataset.val ? null : b.dataset.val}); });
+  const rs = document.getElementById('fp-resp');
+  const isRefList = ()=> meta.responsables && /^RefList/.test(meta.responsables.type);
+  const setResp = ids => update(r, {responsables: isRefList()? ids : (ids[0]||0)}, {responsables: isRefList()? ['L',...ids] : (ids[0]||0)});
+  if (rs) rs.onchange = ()=>{ if(!rs.value) return; const ids = isRefList() ? [...refIds(r.responsables), +rs.value] : [+rs.value]; setResp(ids); };
+  f.querySelectorAll('[data-rmresp]').forEach(x=>x.onclick=()=>setResp(refIds(r.responsables).filter(i=>i!==+x.dataset.rmresp)));
+  const dt = document.getElementById('fp-date');
+  if (dt) dt.onchange = ()=>{ const v=dt.value; update(r, {echeance: v ? Date.UTC(+v.slice(0,4), +v.slice(5,7)-1, +v.slice(8,10))/1000 : null}); };
+  const dc = document.getElementById('fp-dateclr'); if (dc) dc.onclick = ()=>update(r,{echeance:null});
+
   f.querySelectorAll('[data-rm]').forEach(x=>x.onclick=()=>removeTag(r, x.dataset.rm, x.dataset.val));
-  const commitTag = k=>{ const inp=document.getElementById('ta-'+k); const v=inp.value; if(!v.trim()) return; focusAfter='ta-'+k; addTag(r,k,v); };
+  f.querySelectorAll('[data-addsel]').forEach(s=>s.onchange=()=>{
+    const k = s.dataset.addsel;
+    if (s.value==='__new'){ document.getElementById('nr-'+k).style.display='flex'; document.getElementById('ta-'+k).focus(); s.value=''; return; }
+    if (s.value) addTag(r,k,s.value);
+  });
+  const commitTag = k=>{ const inp=document.getElementById('ta-'+k); if(!inp.value.trim()) return; addTag(r,k,inp.value); };
   f.querySelectorAll('[data-fadd]').forEach(b=>b.onclick=()=>commitTag(b.dataset.fadd));
   TAG_CATS.forEach(([k])=>{ const inp=document.getElementById('ta-'+k); if(inp) inp.onkeydown=e=>{ if(e.key==='Enter'){ e.preventDefault(); commitTag(k); } }; });
+
+  const ds = document.getElementById('fp-desc');
+  if (ds) ds.onchange = ()=>update(r,{description: ds.value});
 
   if (map.checklist){
     const edit = fn => { const {lines} = parseChecklist(g(r,'checklist')); fn(lines); update(r,{checklist: lines.join('\n')}); };
@@ -558,11 +815,23 @@ function renderFiche(){
     document.getElementById('cl-addbtn').onclick = addItem;
     document.getElementById('cl-add').onkeydown = e=>{ if(e.key==='Enter'){ e.preventDefault(); addItem(); } };
   }
+
+  if (map.pj){
+    const drop = document.getElementById('fp-drop'), file = document.getElementById('fp-file');
+    drop.onclick = ()=>file.click();
+    file.onchange = ()=>{ uploadFiles(r, file.files); file.value=''; };
+    drop.ondragover = e=>{ e.preventDefault(); drop.classList.add('over'); };
+    drop.ondragleave = ()=>drop.classList.remove('over');
+    drop.ondrop = e=>{ e.preventDefault(); drop.classList.remove('over'); uploadFiles(r, e.dataTransfer.files); };
+    f.querySelectorAll('[data-dl]').forEach(a=>a.onclick=()=>downloadAttachment(+a.dataset.dl));
+    f.querySelectorAll('[data-rmatt]').forEach(b=>b.onclick=()=>{ const ids=refIds(g(r,'pj')).filter(i=>i!==+b.dataset.rmatt); update(r,{pj:ids},{pj:['L',...ids]}); });
+  }
   if (focusAfter){ const e=document.getElementById(focusAfter); if(e) e.focus(); focusAfter=null; }
 }
 
 /* ============ INTERACTIONS ============ */
 function cardOf(el){ const c = el.closest('.card'); return c ? index.get(+c.dataset.id) : null; }
+const isColDrag = e => e.dataTransfer && [...(e.dataTransfer.types||[])].includes('application/x-col');
 function wire(){
   let dragId = null;
   document.querySelectorAll('.card').forEach(c=>{
@@ -575,11 +844,15 @@ function wire(){
       openFiche(id);
     };
   });
+  document.querySelectorAll('.col h2').forEach(h=>{
+    h.ondragstart = e=>{ e.dataTransfer.setData('application/x-col', h.dataset.colh); e.dataTransfer.effectAllowed='move'; };
+  });
   document.querySelectorAll('.col').forEach(col=>{
-    col.ondragover = e=>{ e.preventDefault(); col.classList.add('over'); };
-    col.ondragleave = ()=>col.classList.remove('over');
+    col.ondragover = e=>{ e.preventDefault(); col.classList.add(isColDrag(e)?'colover':'over'); };
+    col.ondragleave = ()=>col.classList.remove('over','colover');
     col.ondrop = e=>{
-      e.preventDefault(); col.classList.remove('over');
+      e.preventDefault(); col.classList.remove('over','colover');
+      if (isColDrag(e)){ moveColumn(e.dataTransfer.getData('application/x-col'), col.dataset.group); return; }
       const r = index.get(+(e.dataTransfer.getData('text/plain') || dragId)); if(!r) return;
       update(r, {groupe: col.dataset.group});
     };
@@ -587,7 +860,7 @@ function wire(){
   document.querySelectorAll('[data-add]').forEach(b=>b.onclick=()=>openNewPop(b.dataset.add));
   document.querySelectorAll('[data-addtag]').forEach(b=>b.onclick=e=>{
     e.stopPropagation();
-    if(!TAG_CATS.some(([k])=>map[k])){ alert("Associez au moins une colonne Étiquettes, Thèmes, Produit ou Sources dans la configuration du widget."); return; }
+    if(!TAG_CATS.some(([k])=>map[k])){ alert("Associez au moins une colonne Étiquettes, Personas, Thèmes, Produit ou Sources dans la configuration du widget."); return; }
     openTagPop(cardOf(b));
   });
   document.querySelectorAll('.card [data-rm]').forEach(x=>x.onclick=e=>{ e.stopPropagation(); removeTag(cardOf(x), x.dataset.rm, x.dataset.val); });
@@ -608,17 +881,19 @@ grist.onOptions(o=>{
   if (o && o.mode) mode = o.mode;
   if (o && o.moi !== undefined) moi = o.moi;
   if (o && o.colors) colors = {groups:o.colors.groups||{}, tags:o.colors.tags||{}};
+  if (o && o.order) colOrder = o.order;
   if (o && o.orange != null) thr.orange = Number(o.orange);
   if (o && o.red != null) thr.red = Number(o.red);
   render();
 });
 grist.onRecords(async (recs, mappings)=>{
   nCalls++; lastCall = new Date().toLocaleTimeString('fr-FR')+' – '+((recs||[]).length)+' ligne(s)';
-  map = mappings;
+  map = mappings ? {...mappings} : null;
+  if (map && map.responsables && !map.personnes) map.personnes = '@Equipe';   // noms déduits de la référence
   if (!host){ try { host = await grist.selectedTable.getTableId(); } catch(e){ host = null; } }
-  rawFirst = (recs && recs[0]) || null;
-  records = (recs && map) ? recs.map(normalize) : [];
-  render();
+  rawRecs = recs || []; rawFirst = rawRecs[0] || null;
+  ingest();
+  ensureMeta();
 });
 </script>
 </body>
