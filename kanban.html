@@ -149,6 +149,11 @@
   #pop button { font:inherit; padding:5px 10px; border:1px solid #ccc; border-radius:4px; background:#fff; cursor:pointer; }
   #pop button.primary { background:var(--accent); color:#fff; border-color:var(--accent); }
   #pop .hint { font-size:11px; color:var(--muted); }
+  .fmeta { font-size:11px; color:var(--muted); padding:0 20px 2px; margin-top:-4px; }
+  .hl { font-size:12px; margin:5px 0; line-height:1.45; color:#333; } .hl .hd { color:var(--muted); } .hl .hv { background:#f1f3f8; border-radius:3px; padding:0 4px; }
+  .vote.on, .dd.vote2.on { background:var(--accent-bg); border-color:var(--accent); color:#2b3a9a; font-weight:700; }
+  .warnc { color:#b25e00; cursor:help; }
+  #menu select { font:inherit; padding:5px 6px; border:1px solid #ccc; border-radius:5px; background:#fff; flex:1; min-width:0; }
 </style>
 </head>
 <body>
@@ -163,7 +168,7 @@
 
 <script>
 /* ============ CONFIGURATION ============ */
-const VERSION = '2026-10-30 f';   // affichée dans le bandeau et le diagnostic : permet de vérifier que le bon fichier est chargé
+const VERSION = '2026-10-30 g';   // affichée dans le bandeau et le diagnostic : permet de vérifier que le bon fichier est chargé
 const STATUTS = ['A faire','En cours','Bloqué','A valider','Terminé','Abandonné','Archivé'];
 const PRIOS   = ['P0 Critique','P1 Important','P2 Souhaitable','P3 Appréciable','Nouveau','Abandonné','Déjà prévu'];
 const CHARGES = ['XS','S','M','L','XL'];
@@ -174,9 +179,15 @@ const PALETTE = [['#fdf1c4','#6b5a10'],['#fcd9d9','#8a2b2b'],['#d6eef7','#1f5f78
                  ['#e8dcf5','#59397a'],['#ffe2c9','#8a4a12'],['#d9ecec','#245f5f'],['#ffd9e8','#8a2b55']];
 const PRIO_TAG = [[/^P0/,['#fcd9d9','#b3202f']],[/^P1/,['#fff0c2','#8a5a00']],[/^P2/,['#d6eef7','#1f5f78']],[/^P3/,['#dde6f2','#3b5a80']]];
 
-// Table des commentaires (à créer dans Grist, voir le guide). Les noms de colonnes sont ceux-ci :
-const COMMENTS = {table:'Commentaires', task:'Tache', parent:'Parent', text:'Texte', author:'Auteur', date:'Date', mentions:'Mentions'};
-const COMMENTS_POLL_MS = 15000;
+// Tables annexes (à créer dans Grist, voir le guide). Le widget retrouve les colonnes par leur nom (accents et majuscules ignorés).
+const TABLES = {
+  comments: {table:'Commentaires', pick:{task:/^tache/, parent:/^parent/, text:/^(texte|text|message|commentaire)/, author:/^(auteur|created_?by|cree_?par|qui)/, date:/^(date|created_?at|cree_?le|horodat|quand)/, email:/(courriel|couriel|e_?mail|^mail)/, mentions:/^mention/}},
+  history:  {table:'Historique',   pick:{task:/^tache/, event:/^(evenement|event|champ|type)/, before:/^(avant|ancien)/, after:/^(apres|nouveau|nouvelle)/, author:/^(auteur|created_?by|cree_?par|qui)/, date:/^(date|created_?at|cree_?le|horodat|quand)/, email:/(courriel|couriel|e_?mail|^mail)/}},
+};
+const SIDE_POLL_MS = 15000;
+const HIST_KEYS = {statut:'Statut', prio:'Prio', charge:'Charge', echeance:'Échéance', responsables:'Responsables'};   // champs dont les changements sont journalisés
+const CARD_KEYS = ['statut','prio','charge'];       // champs modifiables avec le bouton ＋ des cartes
+const STATUT_DEFAUT = 'A faire';
 
 // Champs modifiables depuis la carte et la fiche
 const FIELDS = [
@@ -221,13 +232,20 @@ const COLS = [
   {name:'checklist',    title:'Checklist (colonne Texte)',            type:'Text', optional:true},
   {name:'pj',           title:'Pièces jointes',                       type:'Attachments', optional:true},
   {name:'commentaires', title:'Nb de commentaires (inutile si table Commentaires)', type:'Int,Numeric', optional:true},
-  {name:'votes',        title:'Votes',                                type:'Int,Numeric', optional:true},
+  {name:'votes',        title:'Votes (compteur simple, si pas de Votants)', type:'Int,Numeric', optional:true},
+  {name:'votants',      title:'Votants (Liste de références vers Equipe : un vote par personne)', type:'RefList', optional:true},
+  {name:'creePar',      title:'Créé par (colonne Texte)',             type:'Text', optional:true},
+  {name:'creeLe',       title:'Créé le (Date et heure)',              type:'Date,DateTime', optional:true},
+  {name:'modifPar',     title:'Modifié par (colonne Texte)',          type:'Text', optional:true},
+  {name:'modifLe',      title:'Modifié le (Date et heure)',           type:'Date,DateTime', optional:true},
 ];
 
 /* ============ ÉTAT ============ */
 const $ = id => document.getElementById(id);
 let mode = 'suivi';            // suivi | backlog | perso
-let moi = '';                  // nom de la personne pour le mode "perso"
+let moi = lsGet('moi','');   // personne qui utilise CE navigateur (mémorisée dans le navigateur, pas partagée)
+let grp = 'statut';           // regroupement des colonnes en vue Suivi : statut | prio
+let sortPref = lsGet('sort', []);   // critères de tri (propres à ce navigateur)
 let map = null;                // association des colonnes
 let host = null;               // identifiant de la table où le widget est installé
 let rawRecs = [];              // lignes telles que reçues de Grist
@@ -243,8 +261,9 @@ let ficheSig = '';             // signature de la carte affichée (évite de rec
 let metaTick = 0, metaSig = '', meta = {}, metaNote = '';
 let team = [], teamById = {}, teamCol = null, teamTable = null;
 let attMeta = {};              // id de pièce jointe -> {name, size}
-let uploading = false;
-let comments = [], commentsOk = null, commentsNote = '', commentsTick = 0, commentsSig = '';
+const mkSide = ()=>({rows:[], ok:null, note:'', tick:0, sig:'', cols:null, fill:new Set()});
+const side = {comments: mkSide(), history: mkSide()};   // tables annexes
+let histNote = '';
 let drafts = {};               // brouillons de commentaires
 let menu = null;               // menu déroulant ouvert : {anchor, build}
 let manage = null;             // fenêtre "gérer les valeurs" : {key, confirm, msg}
@@ -326,6 +345,30 @@ function parseChecklist(text){
 }
 function checklistCount(t){ const {items} = parseChecklist(t); return {done: items.filter(x=>x.done).length, total: items.length}; }
 
+/* ---- Préférences propres à ce navigateur (non partagées) ---- */
+function lsGet(k, d){ try { const v = localStorage.getItem('kanban.'+k); return v==null ? d : JSON.parse(v); } catch(e){ return d; } }
+function lsSet(k, v){ try { localStorage.setItem('kanban.'+k, JSON.stringify(v)); } catch(e){} }
+const norm = s => String(s==null?'':s).normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase().trim();
+const meObj = () => team.find(t=>t.label===moi) || null;
+function who(s){   // nom lisible : « prenom.nom », courriel ou nom → nom de la table Equipe quand on le retrouve
+  s = String(s==null?'':s).trim(); if (!s) return '';
+  const n = norm(s);
+  const p = team.find(t=>{ const l = norm(t.label), em = norm(t.email); return l===n || l.replace(/\s+/g,'.')===n || (em && (em===n || em.split('@')[0]===n)); });
+  return p ? p.label : s;
+}
+function resolveCols(t, pick){
+  const keys = Object.keys(t).filter(k=>k!=='id' && !/^(manualSort|gristHelper_)/.test(k));
+  const used = new Set(), out = {};
+  for (const name in pick){ const k = keys.find(x=>!used.has(x) && pick[name].test(norm(x))); out[name] = k || null; if (k) used.add(k); }
+  return out;
+}
+function valLabel(card, k, v){   // valeur lisible d'un champ (pour le journal)
+  const x = v===undefined ? card[k] : v;
+  if (k==='responsables') return refIds(x).map(id=>teamById[id]||('#'+id)).join(', ');
+  if (k==='echeance'){ const d = toDate(x); return d ? d.toLocaleDateString('fr-FR') : ''; }
+  return Array.isArray(x) ? toList(x).join(', ') : (x==null ? '' : String(x));
+}
+
 /* ============ MÉTADONNÉES DES COLONNES ============ */
 async function loadMeta(){
   meta = {}; team = []; teamById = {}; teamCol = null; teamTable = null; metaNote = '';
@@ -348,7 +391,8 @@ async function loadMeta(){
       let lab = meta.responsables.visCol;
       if (!lab || !(lab in E)) lab = ['Nom','nom','NOM','Name','name','Titre'].find(x=>x in E) || Object.keys(E).find(x=>!/^(id|manualSort|gristHelper_)/.test(x));
       teamCol = lab;
-      (E.id||[]).forEach((id,i)=>{ const label = String(E[lab] ? E[lab][i] : '').trim(); if (label) { team.push({id, label}); teamById[id] = label; } });
+      const emCol = Object.keys(E).find(x=>/courriel|couriel|e_?mail|^mail/i.test(x));
+      (E.id||[]).forEach((id,i)=>{ const label = String(E[lab] ? E[lab][i] : '').trim(); if (label) { team.push({id, label, email: emCol ? String(E[emCol][i]||'').trim() : ''}); teamById[id] = label; } });
       team.sort((a,b)=>a.label.localeCompare(b.label,'fr'));
       metaNote = `table « ${teamTable} » (colonne « ${lab} ») : ${team.length} personne(s)`;
     }
@@ -387,44 +431,65 @@ async function loadAttachMeta(){
 }
 
 /* ============ COMMENTAIRES (table séparée) ============ */
-async function loadComments(){
-  let sig = '';
-  try {
-    const t = await grist.docApi.fetchTable(COMMENTS.table);
-    const miss = [COMMENTS.task, COMMENTS.text].filter(c=>!(c in t));
-    if (miss.length) throw new Error('colonne(s) absente(s) dans « '+COMMENTS.table+' » : '+miss.join(', '));
-    const list = [];
-    (t.id||[]).forEach((id,i)=>{
-      list.push({id, task: refIds(t[COMMENTS.task][i])[0] || 0, parent: t[COMMENTS.parent] ? (refIds(t[COMMENTS.parent][i])[0]||0) : 0,
-        text: String(t[COMMENTS.text][i] ?? ''), author: t[COMMENTS.author] ? String(t[COMMENTS.author][i] ?? '') : '',
-        date: t[COMMENTS.date] ? toDate(t[COMMENTS.date][i]) : null});
-    });
-    comments = list; commentsOk = true; commentsNote = list.length+' commentaire(s)';
-    sig = JSON.stringify(list);
-  } catch(e){ comments = []; commentsOk = false; commentsNote = ((e&&e.message)||String(e)); sig = 'ko:'+commentsNote; }
-  if (sig !== commentsSig){ commentsSig = sig; commentsTick++; render(); }
+function fillBlanks(kind, t, c){   // complète auteur / courriel / date si la formule de Grist ne l'a pas fait
+  const S = side[kind], me = meObj(), ups = [];
+  S.fill.forEach(rid=>{
+    const i = (t.id||[]).indexOf(rid); if (i<0) return; const f = {};
+    if (me && c.author && !t[c.author][i]) f[c.author] = me.label;
+    if (me && me.email && c.email && !t[c.email][i]) f[c.email] = me.email;
+    if (c.date && (t[c.date][i]==null || t[c.date][i]==='')) f[c.date] = Math.floor(Date.now()/1000);
+    if (Object.keys(f).length) ups.push(['UpdateRecord', TABLES[kind].table, rid, f]);
+  });
+  return ups;
 }
-const commentsOf = id => comments.filter(c=>c.task===id);
-function commentCount(r){ return commentsOk ? commentsOf(r.id).length : (Number(g(r,'commentaires'))||0); }
+async function loadTable(kind, again){
+  const T = TABLES[kind], S = side[kind]; let sig = '';
+  try {
+    const t = await grist.docApi.fetchTable(T.table);
+    const c = resolveCols(t, T.pick);
+    if (!c.task) throw new Error('colonne « Tache » (référence vers Taches) absente');
+    if (kind==='comments' && !c.text) throw new Error('colonne « Texte » absente');
+    S.cols = c;
+    if (S.fill.size && !again){
+      const ups = fillBlanks(kind, t, c); S.fill.clear();
+      if (ups.length){ await grist.docApi.applyUserActions(ups); return loadTable(kind, true); }
+    }
+    const cell = (col,i) => col ? t[col][i] : null;
+    S.rows = (t.id||[]).map((id,i)=>({id, task: refIds(cell(c.task,i))[0]||0, parent: refIds(cell(c.parent,i))[0]||0,
+      text: String(cell(c.text,i) ?? ''), event: String(cell(c.event,i) ?? ''), before: String(cell(c.before,i) ?? ''), after: String(cell(c.after,i) ?? ''),
+      author: String(cell(c.author,i) ?? ''), email: String(cell(c.email,i) ?? ''), date: c.date ? toDate(cell(c.date,i)) : null}));
+    S.ok = true; S.note = S.rows.length+' ligne(s)';
+    sig = JSON.stringify(S.rows);
+  } catch(e){ S.rows = []; S.cols = null; S.ok = false; S.note = ((e&&e.message)||String(e)); sig = 'ko:'+S.note; }
+  if (sig !== S.sig){ S.sig = sig; S.tick++; render(); }
+}
+const loadSide = () => Promise.all([loadTable('comments'), loadTable('history')]);
+function histActions(entries){
+  const c = side.history.cols; if (!c || !c.task) return [];
+  return entries.map(e=>{ const f = {[c.task]: e.taskId};
+    if (c.event) f[c.event] = e.event; if (c.before) f[c.before] = e.before||''; if (c.after) f[c.after] = e.after||'';
+    return ['AddRecord', TABLES.history.table, null, f]; });
+}
+const commentsOf = id => side.comments.rows.filter(c=>c.task===id);
+const historyOf = id => side.history.rows.filter(h=>h.task===id);
+function commentCount(r){ return side.comments.ok ? commentsOf(r.id).length : (Number(g(r,'commentaires'))||0); }
 async function addComment(taskId, parentId, text){
   text = String(text||'').trim(); if (!text) return false;
-  const fields = {[COMMENTS.task]: taskId, [COMMENTS.text]: text};
-  if (parentId) fields[COMMENTS.parent] = parentId;
+  const c = side.comments.cols; if (!c){ alert('Table « '+TABLES.comments.table+' » inutilisable : '+side.comments.note); return false; }
+  const f = {[c.task]: taskId, [c.text]: text};
+  if (parentId && c.parent) f[c.parent] = parentId;
   const ids = team.filter(p=>text.includes('@'+p.label)).map(p=>p.id);
-  if (ids.length) fields[COMMENTS.mentions] = ['L', ...ids];
-  try { await grist.docApi.applyUserActions([['AddRecord', COMMENTS.table, null, fields]]); }
-  catch(e){
-    if (ids.length){ delete fields[COMMENTS.mentions];   // colonne Mentions absente : on réessaie sans
-      try { await grist.docApi.applyUserActions([['AddRecord', COMMENTS.table, null, fields]]); } catch(e2){ alert('Commentaire non enregistré : '+((e2&&e2.message)||e2)); return false; } }
-    else { alert('Commentaire non enregistré : '+((e&&e.message)||e)); return false; }
-  }
-  await loadComments(); return true;
+  if (ids.length && c.mentions) f[c.mentions] = ['L', ...ids];
+  const res = await actRes([['AddRecord', TABLES.comments.table, null, f]]);
+  if (!res) return false;
+  const id = res.retValues && res.retValues[0]; if (typeof id==='number') side.comments.fill.add(id);
+  await loadTable('comments'); return true;
 }
 async function deleteComment(id){
   const del = new Set([id]); let grown = true;
-  while (grown){ grown = false; comments.forEach(c=>{ if (c.parent && del.has(c.parent) && !del.has(c.id)){ del.add(c.id); grown = true; } }); }
-  try { await grist.docApi.applyUserActions([...del].map(i=>['RemoveRecord', COMMENTS.table, i])); } catch(e){ alert('Suppression impossible : '+((e&&e.message)||e)); }
-  await loadComments();
+  while (grown){ grown = false; side.comments.rows.forEach(c=>{ if (c.parent && del.has(c.parent) && !del.has(c.id)){ del.add(c.id); grown = true; } }); }
+  await actRes([...del].map(i=>['RemoveRecord', TABLES.comments.table, i]));
+  await loadTable('comments');
 }
 function mentionHtml(text){
   let h = esc(text);
@@ -435,10 +500,11 @@ function mentionHtml(text){
 /* ============ ÉCRITURE DANS GRIST ============ */
 // Met à jour la carte tout de suite à l'écran (optimiste), puis écrit dans Grist.
 // changes : {cléWidget: valeur affichée} ; encoded : {cléWidget: valeur envoyée à Grist} (listes : ['L', ...])
-async function update(card, changes, encoded){
-  const cols = {}, applied = {};
+async function update(card, changes, encoded, extraLog){
+  const cols = {}, applied = {}, log = (extraLog||[]).map(e=>({taskId: card.id, ...e}));
   for (const k in changes){
     if (!map[k]) continue;
+    if (HIST_KEYS[k]){ const b = valLabel(card,k), a = valLabel(card,k,changes[k]); if (b!==a) log.push({taskId: card.id, event: HIST_KEYS[k], before: b, after: a}); }
     card[k] = changes[k]; applied[k] = changes[k];
     cols[map[k]] = (encoded && k in encoded) ? encoded[k] : changes[k];
   }
@@ -446,15 +512,22 @@ async function update(card, changes, encoded){
   const p = pending.get(card.id) || {changes:{}, t:0};
   Object.assign(p.changes, applied); p.t = Date.now(); pending.set(card.id, p);
   derive(card); render();
-  const ok = await act([['UpdateRecord', host, card.id, cols]]);
-  if (!ok){ pending.delete(card.id); ingest(); }
-  return ok;
+  const main = [['UpdateRecord', host, card.id, cols]], hist = histActions(log);
+  let res;
+  if (hist.length){
+    res = await actRes(main.concat(hist), true);          // modification + journal dans une seule opération
+    if (res){ histNote = ''; (res.retValues||[]).slice(1).forEach(id=>{ if (typeof id==='number') side.history.fill.add(id); }); loadTable('history'); }
+    else { res = await actRes(main); if (res) histNote = "Le journal n'a pas pu être enregistré : vérifiez la table « Historique » (droits, colonnes)."; }
+  } else res = await actRes(main);
+  if (!res){ pending.delete(card.id); ingest(); return false; }
+  return true;
 }
-async function act(actions){
-  if (!host){ alert("Table du widget introuvable : rechargez la page."); return false; }
-  try { await grist.docApi.applyUserActions(actions); return true; }
-  catch(e){ alert('Action refusée ou impossible : ' + ((e && e.message) || e)); return false; }
+async function actRes(actions, quiet){
+  if (!host){ if (!quiet) alert("Table du widget introuvable : rechargez la page."); return null; }
+  try { return (await grist.docApi.applyUserActions(actions)) || {retValues:[]}; }
+  catch(e){ if (!quiet) alert('Action refusée ou impossible : ' + ((e && e.message) || e)); return null; }
 }
+async function act(actions){ return !!(await actRes(actions)); }
 
 /* ============ VALEURS D'UN CHAMP (carte, fiche, filtres) ============ */
 const fieldOn = f => map && (f.key==='responsables' ? (map.responsables || map.personnes) : map[f.key]);
@@ -484,6 +557,20 @@ function clearField(card, key){
   return update(card, {[key]: null});
 }
 function removeValue(card, key, v){ if (key==='responsables') return setField(card,key,+v); return setField(card,key,String(v)); }
+
+/* --- votes : un vote par personne si la colonne Votants est associée --- */
+const voteCount = r => map.votants ? refIds(r.votants).length : (Number(g(r,'votes'))||0);
+const hasVoted = r => { const m = meObj(); return !!(map.votants && m && refIds(r.votants).includes(m.id)); };
+function castVote(card){
+  if (!card) return;
+  if (map.votants){
+    const m = meObj();
+    if (!m){ alert("Choisissez qui vous êtes dans la liste « Moi » (en haut de la vue) pour voter : un vote par personne."); return; }
+    const cur = refIds(card.votants), ids = cur.includes(m.id) ? cur.filter(x=>x!==m.id) : [...cur, m.id];
+    return update(card, {votants: ids}, {votants: ['L', ...ids]});
+  }
+  return update(card, {votes: (Number(g(card,'votes'))||0)+1});
+}
 
 /* --- création de nouvelles valeurs --- */
 async function widgetOptsWrite(key, mutate){
@@ -520,9 +607,9 @@ function renderMenu(){
   const el = $('menu');
   if (!menu){ el.style.display='none'; return; }
   const a = document.querySelector(`[data-anchor="${menu.anchor}"]`);
-  if (!a){ el.style.display='none'; return; }
+  if (!a){ closeMenu(); return; }
   const ae = document.activeElement;
-  if (el.contains(ae) && ae.tagName==='INPUT' && ae.value) return;          // on ne casse pas une saisie en cours
+  if (el.contains(ae) && ae.tagName==='INPUT' && ['text','date','search'].includes(ae.type) && ae.value) return;          // on ne casse pas une saisie en cours
   const b = menu.build();
   el.innerHTML = b.html; el.style.display = 'block';
   const r = a.getBoundingClientRect();
@@ -532,7 +619,7 @@ function renderMenu(){
   b.bind(el);
 }
 function fieldPicker(cardId){
-  return ()=>({ html: '<div class="mh">Ajouter / modifier</div>' + FIELDS.filter(fieldOn).map(f=>`<div class="mi" data-pk="${f.key}">${f.label}</div>`).join(''),
+  return ()=>({ html: '<div class="mh">Ajouter / modifier</div>' + FIELDS.filter(f=>CARD_KEYS.includes(f.key) && fieldOn(f)).map(f=>`<div class="mi" data-pk="${f.key}">${f.label}</div>`).join(''),
     bind: el=>el.querySelectorAll('[data-pk]').forEach(x=>x.onclick=()=>{ menu.build = fieldMenu(cardId, x.dataset.pk, true); renderMenu(); }) });
 }
 function fieldMenu(cardId, key, fromPicker){
@@ -675,17 +762,18 @@ async function mgDelete(key, v){
 
 /* ============ COLONNES DU KANBAN (selon la vue) ============ */
 // Vue Backlog : colonnes = Prio. Vues Suivi et Mes tâches : colonnes = Statut.
-const groupKey = () => mode==='backlog' ? 'prio' : 'statut';
+const groupKey = () => mode==='backlog' ? 'prio' : (grp==='prio' ? 'prio' : 'statut');
+const orderKey = () => mode==='backlog' ? 'backlog' : (groupKey()==='prio' ? mode+':prio' : mode);   // ordre des colonnes mémorisé par vue et par regroupement
 const groupOf = r => String(g(r, groupKey()) || '');
 function groupList(){
   const k = groupKey(), fld = FIELDS.find(f=>f.key===k);
   const defaults = k==='prio' ? PRIO_COLORS : STATUT_COLORS;
-  const base = choicesFor(k, fld.fallback).filter((v,i,a)=>true);
-  const declared = (meta[k] && meta[k].choices && meta[k].choices.length) ? meta[k].choices : fld.fallback;
-  const all = base.slice().sort((a,b)=>{ const ia=declared.indexOf(a), ib=declared.indexOf(b); return (ia<0?999:ia)-(ib<0?999:ib); });
-  const ord = colOrder[mode] || [];
+  const hasDecl = !!(meta[k] && meta[k].choices && meta[k].choices.length);
+  const declared = hasDecl ? meta[k].choices : fld.fallback;
+  const all = choicesFor(k, fld.fallback).sort((a,b)=>{ const ia=declared.indexOf(a), ib=declared.indexOf(b); return (ia<0?999:ia)-(ib<0?999:ib); });
+  const ord = colOrder[orderKey()] || [];
   const rank = n => { const i = ord.indexOf(n); return i>=0 ? i : 1000 + all.indexOf(n); };
-  const list = all.map((n,i)=>({name:n, color:colors.groups[n]||defaults[i]||'#999'})).sort((a,b)=>rank(a.name)-rank(b.name));
+  const list = all.map((n,i)=>({name:n, color:colors.groups[n]||defaults[i]||'#999', warn: hasDecl && !declared.includes(n)})).sort((a,b)=>rank(a.name)-rank(b.name));
   if (records.some(r=>inView(r) && !groupOf(r))) list.push({name:'', label: k==='prio'?'Sans priorité':'Sans statut', color:'#bbb'});
   return list;
 }
@@ -695,7 +783,42 @@ function moveColumn(from, to){
   const names = before.slice(); const fi = names.indexOf(from); if (fi<0) return;
   names.splice(fi,1); const ti = names.indexOf(to);
   names.splice(fi < before.indexOf(to) ? ti+1 : ti, 0, from);
-  colOrder[mode] = names; grist.setOption('order', colOrder); render();
+  colOrder[orderKey()] = names; grist.setOption('order', colOrder); render();
+}
+
+/* ============ TRI DES CARTES (dans chaque colonne) ============ */
+const SORTS = [['prio','Prio'],['echeance','Échéance'],['charge','Charge']];
+function sortCards(list){
+  const crit = sortPref.filter(s=>s && s.k && map[s.k]);
+  const rankOf = (r,k)=>{
+    if (k==='echeance'){ const d = toDate(g(r,'echeance')); return d ? +d : null; }
+    const v = g(r,k); if (!v) return null;
+    const dec = (meta[k] && meta[k].choices && meta[k].choices.length) ? meta[k].choices : FIELDS.find(f=>f.key===k).fallback;
+    const i = dec.indexOf(String(v)); return i<0 ? 999 : i;
+  };
+  return list.slice().sort((a,b)=>{
+    for (const s of crit){
+      const x = rankOf(a,s.k), y = rankOf(b,s.k);
+      if (x===y) continue; if (x==null) return 1; if (y==null) return -1;
+      return s.d==='desc' ? y-x : x-y;
+    }
+    const da = toDate(g(a,'echeance')), db = toDate(g(b,'echeance'));
+    return ((da?+da:9e15)-(db?+db:9e15)) || (a.id-b.id);
+  });
+}
+function saveSort(){ sortPref = [0,1,2].map(i=>sortPref[i]||{}); lsSet('sort', sortPref); renderHeader(); renderBoard(); if (menu) renderMenu(); }
+function sortMenu(){
+  return ()=>{
+    sortPref = [0,1,2].map(i=>sortPref[i]||{});
+    const row = i=>{ const s = sortPref[i];
+      return `<div class="row"><select data-sk="${i}"><option value="">${i?'puis par…':'Trier par…'}</option>${SORTS.filter(([k])=>map[k]).map(([k,l])=>`<option value="${k}" ${s.k===k?'selected':''}>${l}</option>`).join('')}</select><button class="fb" data-sd="${i}" title="Sens du tri">${s.d==='desc'?'↓ décroissant':'↑ croissant'}</button></div>`; };
+    return { html: '<div class="mh">Trier les cartes de chaque colonne</div>'+row(0)+row(1)+row(2)+'<div class="sep"></div><span class="lnk" data-sclr>Tri par défaut (échéance)</span>',
+      bind: el=>{
+        el.querySelectorAll('[data-sk]').forEach(x=>x.onchange=()=>{ const i=+x.dataset.sk; sortPref[i] = {k:x.value, d:sortPref[i].d||'asc'}; saveSort(); });
+        el.querySelectorAll('[data-sd]').forEach(b=>b.onclick=()=>{ const i=+b.dataset.sd; sortPref[i] = {k:sortPref[i].k, d:sortPref[i].d==='desc'?'asc':'desc'}; saveSort(); });
+        const c = el.querySelector('[data-sclr]'); if (c) c.onclick = ()=>{ sortPref = []; saveSort(); };
+      } };
+  };
 }
 
 /* ============ FILTRAGE ============ */
@@ -733,10 +856,9 @@ function renderHeader(){
       <option value="backlog" ${mode==='backlog'?'selected':''}>Backlog</option>
       <option value="perso" ${mode==='perso'?'selected':''}>Mes tâches</option></select></label>`;
   if (map){
-    if (mode==='perso'){
-      const names = [...new Set([...team.map(t=>t.label), ...records.flatMap(r=>L(r,'personnes'))])].sort((a,b)=>a.localeCompare(b,'fr'));
-      h += `<label>Moi <select id="f-moi"><option value="">— tout le monde —</option>${names.map(n=>`<option ${n===moi?'selected':''}>${esc(n)}</option>`).join('')}</select></label>`;
-    }
+    if (mode!=='backlog' && map.prio && map.statut) h += `<label>Grouper par <select id="f-grp"><option value="statut" ${grp!=='prio'?'selected':''}>Statut</option><option value="prio" ${grp==='prio'?'selected':''}>Prio</option></select></label>`;
+    { const names = team.length ? team.map(t=>t.label) : [...new Set(records.flatMap(r=>L(r,'personnes')))].sort((a,b)=>a.localeCompare(b,'fr'));
+      h += `<label title="Qui utilise ce navigateur : sert à « Mes tâches », aux votes et à la signature des commentaires (mémorisé sur cet ordinateur)">Moi <select id="f-moi"><option value="">— choisir —</option>${names.map(n=>`<option ${n===moi?'selected':''}>${esc(n)}</option>`).join('')}</select></label>`; }
     FILTERS.forEach(f=>{
       if (f.skipIn===mode) return;
       if (f.key==='personnes' ? !(map.responsables||map.personnes) : !has(f.key)) return;
@@ -745,12 +867,15 @@ function renderHeader(){
     });
     if (mode!=='backlog' && has('echeance')) h += `<label>Du <input type="date" id="f-from" value="${F.from}"></label><label>au <input type="date" id="f-to" value="${F.to}"></label>`;
   }
+  if (map){ const ns = sortPref.filter(s=>s && s.k).length; h += `<button class="fb ${ns?'active':''}" data-anchor="sort" id="sortBtn" title="Trier les cartes de chaque colonne">Tri${ns?` (${ns})`:''} ▾</button>`; }
   h += `<input type="search" id="f-q" placeholder="Mot clé…" value="${esc(F.q)}">`;
   h += `<button id="reset">Réinitialiser</button><span class="spacer"></span><button id="mgBtn" title="Ajouter, renommer, supprimer des valeurs">✎ Valeurs</button><button id="diagBtn">🔧</button><button id="colorsBtn">🎨 Couleurs</button>`;
   $('hdr').innerHTML = h;
 
   $('mode').onchange = e=>{ mode=e.target.value; grist.setOption('mode',mode); closeMenu(); render(); };
-  const mo = $('f-moi'); if (mo) mo.onchange = ()=>{ moi = mo.value; grist.setOption('moi',moi); render(); };
+  const mo = $('f-moi'); if (mo) mo.onchange = ()=>{ moi = mo.value; lsSet('moi',moi); render(); };
+  const gp = $('f-grp'); if (gp) gp.onchange = ()=>{ grp = gp.value; grist.setOption('group',grp); render(); };
+  const sb = $('sortBtn'); if (sb) sb.onclick = ()=>openMenu('sort', sortMenu());
   document.querySelectorAll('[data-fbtn]').forEach(b=>b.onclick=()=>{ const f = FILTERS.find(x=>x.id===b.dataset.fbtn); openMenu('f-'+f.id, filterMenu(f)); });
   const ff = $('f-from'); if (ff) ff.onchange = ()=>{ F.from=ff.value; render(); };
   const ft = $('f-to'); if (ft) ft.onchange = ()=>{ F.to=ft.value; render(); };
@@ -773,6 +898,7 @@ function renderWarn(){
       parts.push(`<div class="info">${t} <span style="opacity:.6">(widget v${VERSION})</span></div>`);
     }
   }
+  if (histNote) parts.push(`<div class="warn">${esc(histNote)}</div>`);
   $('warn').innerHTML = parts.join('');
 }
 async function loadTableCount(){
@@ -792,7 +918,9 @@ function renderDiag(){
     'Association des colonnes : '+JSON.stringify(map),
     'Types des colonnes : '+JSON.stringify(Object.fromEntries(Object.entries(meta).map(([k,v])=>[k,v.type]))),
     'Métadonnées : '+(metaNote||'(aucune remarque)'),
-    'Commentaires : '+(commentsOk===null?'non chargés':commentsOk?commentsNote:'indisponibles – '+commentsNote),
+    'Commentaires : '+(side.comments.ok===null?'non chargés':side.comments.ok?side.comments.note+' | colonnes '+JSON.stringify(side.comments.cols):'indisponibles – '+side.comments.note),
+    'Historique : '+(side.history.ok===null?'non chargé':side.history.ok?side.history.note+' | colonnes '+JSON.stringify(side.history.cols):'indisponible – '+side.history.note),
+    'Moi (ce navigateur) : '+(moi||'(non choisi)')+' | tri : '+JSON.stringify(sortPref.filter(s=>s&&s.k)),
     'Cartes affichables dans cette vue : '+(map?records.filter(passes).length:'?'),
     'Première ligne brute : '+(rawFirst?JSON.stringify(rawFirst):'(aucune)').slice(0,400),
     'Première ligne convertie : '+first.slice(0,400),
@@ -825,13 +953,13 @@ function cardHtml(r){
   if (mode!=='backlog' && g(r,'prio')) tags += tagX(g(r,'prio'),'prio');
   if (g(r,'charge')) tags += tagX(g(r,'charge'),'charge');
   ['etiquettes','personas','produit','themes','sources'].forEach(k=>L(r,k).forEach(t=>tags+=tagX(t,k)));
-  tags += `<button class="cplus" data-cplus="1" data-anchor="cp-${r.id}" title="Ajouter ou modifier : statut, prio, charge, étiquettes, responsable, échéance…">＋</button>`;
+  tags += `<button class="cplus" data-cplus="1" data-anchor="cp-${r.id}" title="Modifier le statut, la prio ou la charge">＋</button>`;
   let m = dateBadge(r);
   const cl = checklistCount(g(r,'checklist'));
   if (cl.total) m += `<span>☑ ${cl.done}/${cl.total}</span>`;
   const pj = refIds(g(r,'pj')).length; if (pj) m += `<span>📎${pj}</span>`;
   const cc = commentCount(r); if (cc) m += `<span>🗨️${cc}</span>`;
-  if (mode==='backlog' && map.votes) m += `<button class="vote" data-vote="1">👍 ${g(r,'votes')||0}</button>`;
+  if (mode==='backlog' && (map.votes||map.votants)) m += `<button class="vote ${hasVoted(r)?'on':''}" data-vote="1" title="${map.votants?(hasVoted(r)?'Retirer mon vote':'Voter (un vote par personne)'):'Voter'}">👍 ${voteCount(r)}</button>`;
   if (mode==='backlog') m += `<button class="tosuivi" data-tosuivi="1" title="Passer dans le suivi (statut A faire)">➜ Suivi</button>`;
   if (mode!=='backlog' && g(r,'statut')==='A faire') m += `<button class="tobacklog" data-tobacklog="1" title="Remettre dans le backlog (statut vidé)">⬅ Backlog</button>`;
   const av = L(r,'personnes').map(n=>`<div class="av" title="${esc(n)}">${esc(initials(n))}</div>`).join('');
@@ -846,12 +974,9 @@ function renderBoard(){
   const left = board.scrollLeft, top = board.scrollTop;
   const shown = records.filter(passes);
   board.innerHTML = groupList().map(gr=>{
-    const cards = shown.filter(r=>groupOf(r)===gr.name).sort((a,b)=>{
-      const da=toDate(g(a,'echeance')), db=toDate(g(b,'echeance'));
-      return (da?+da:9e15)-(db?+db:9e15);
-    });
+    const cards = sortCards(shown.filter(r=>groupOf(r)===gr.name));
     return `<div class="col" data-group="${esc(gr.name)}">
-      <h2 ${gr.name?'draggable="true"':''} data-colh="${esc(gr.name)}" title="Glisser pour déplacer la colonne"><span class="grip">⋮⋮</span><span class="dot" style="background:${gr.color}"></span>${esc(gr.label||gr.name)}<span class="count">${cards.length}</span></h2>
+      <h2 ${gr.name?'draggable="true"':''} data-colh="${esc(gr.name)}" title="Glisser pour déplacer la colonne"><span class="grip">⋮⋮</span><span class="dot" style="background:${gr.color}"></span>${esc(gr.label||gr.name)}${gr.warn?'<span class="warnc" title="Valeur absente des choix de la colonne Grist : saisie par erreur ? Corrigez-la dans la table.">⚠</span>':''}<span class="count">${cards.length}</span></h2>
       ${cards.map(cardHtml).join('')}
       ${gr.name?`<button class="add" data-add="${esc(gr.name)}">+ Nouvelle carte</button>`:''}</div>`;
   }).join('');
@@ -886,7 +1011,7 @@ function renderPanel(){
   $('pclose').onclick = ()=>{ panelOpen=false; renderPanel(); };
   p.querySelectorAll('[data-grp]').forEach(i=>{ i.oninput = ()=>{ colors.groups[i.dataset.grp]=i.value; renderBoard(); }; i.onchange = ()=>saveColors(); });
   p.querySelectorAll('[data-tag]').forEach(i=>{ i.oninput = ()=>{ colors.tags[i.dataset.tag]=i.value; renderBoard(); }; i.onchange = ()=>{ saveColors(); renderPanel(); }; });
-  $('oreset').onclick = ()=>{ delete colOrder[mode]; grist.setOption('order', colOrder); render(); };
+  $('oreset').onclick = ()=>{ delete colOrder[orderKey()]; grist.setOption('order', colOrder); render(); };
   $('t-orange').onchange = e=>{ thr.orange=+e.target.value; grist.setOption('orange',thr.orange); renderBoard(); };
   $('t-red').onchange = e=>{ thr.red=+e.target.value; grist.setOption('red',thr.red); renderBoard(); };
   $('creset').onclick = ()=>{ colors={groups:{},tags:{}}; saveColors(); render(); };
@@ -899,10 +1024,18 @@ function openNewPop(group){
   p.innerHTML = `<b>Nouvelle carte</b> <span class="hint">(${esc(group)})</span>
     <div class="row"><input id="nt" placeholder="Titre de la tâche…" autocomplete="off"></div>
     <div class="row" style="justify-content:flex-end"><button id="ncancel">Annuler</button><button class="primary" id="nok">Créer</button></div>`;
-  const ok = ()=>{
+  const ok = async ()=>{
     const t = $('nt').value.trim();
     if (!t) return; closePop();
-    act([['AddRecord', host, null, {[map.titre]: t, [map[groupKey()]]: group}]]);   // Suivi : colonne = Statut ; Backlog : colonne = Prio
+    const f = {[map.titre]: t, [map[groupKey()]]: group};                 // Suivi : colonne = Statut ; Backlog : colonne = Prio
+    if (mode!=='backlog' && groupKey()==='prio' && map.statut) f[map.statut] = STATUT_DEFAUT;   // sinon la carte partirait au Backlog
+    const res = await actRes([['AddRecord', host, null, f]]);
+    const id = res && res.retValues && res.retValues[0];
+    if (typeof id==='number'){
+      const h = histActions([{taskId:id, event:'Création', before:'', after:t}]);
+      const r2 = h.length ? await actRes(h, true) : null;
+      if (r2 && r2.retValues && typeof r2.retValues[0]==='number'){ side.history.fill.add(r2.retValues[0]); loadTable('history'); }
+    }
   };
   $('nok').onclick = ok; $('ncancel').onclick = closePop;
   $('nt').onkeydown = e=>{ if(e.key==='Enter') ok(); if(e.key==='Escape') closePop(); };
@@ -910,39 +1043,8 @@ function openNewPop(group){
 }
 
 /* ============ PIÈCES JOINTES ============ */
-async function postAttachments(tok, files){
-  const attempts = [];
-  const bases = [tok.baseUrl];
-  if (/^http:\/\//i.test(tok.baseUrl)) bases.push(tok.baseUrl.replace(/^http:/i,'https:'));      // adresse annoncée en http alors que la page est en https
-  for (const base of bases){
-    for (const mode_ of ['query','header']){
-      try {
-        const fd = new FormData(); files.forEach(f=>fd.append('upload', f, f.name));
-        const url = mode_==='query' ? `${base}/attachments?auth=${encodeURIComponent(tok.token)}` : `${base}/attachments`;
-        const res = await fetch(url, {method:'POST', body:fd, headers: mode_==='header' ? {Authorization:'Bearer '+tok.token} : undefined});
-        if (res.ok) return await res.json();
-        attempts.push(`${mode_} : code ${res.status}`);
-      } catch(e){ attempts.push(`${mode_} : ${(e&&e.message)||e}`); }
-    }
-  }
-  let host_ = ''; try { host_ = new URL(tok.baseUrl).host; } catch(e){}
-  throw new Error('le navigateur ne peut pas joindre le serveur Grist ('+(host_||'?')+') depuis ce widget ['+attempts.join(' ; ')+']');
-}
-async function uploadFiles(card, files){
-  files = [...files]; if (!files.length) return;
-  uploading = true; refreshFiche();
-  try {
-    const tok = await grist.docApi.getAccessToken({readOnly:false});
-    const ids = (await postAttachments(tok, files)).filter(x=>typeof x==='number');
-    const fresh = index.get(card.id) || card;
-    const all = [...new Set([...refIds(g(fresh,'pj')), ...ids])];
-    await loadAttachMeta();
-    await update(fresh, {pj:all}, {pj:['L',...all]});
-  } catch(e){
-    alert("Envoi de la pièce jointe impossible : "+((e&&e.message)||e)+"\n\nEn attendant, ajoutez le fichier directement dans la cellule « PJ » de la table (glisser-déposer dans Grist) : il s'affichera ensuite dans la fiche.");
-  }
-  uploading = false; refreshFiche();
-}
+
+
 async function downloadAttachment(id){
   try {
     const tok = await grist.docApi.getAccessToken({readOnly:true});
@@ -957,8 +1059,8 @@ function openFiche(id){ openId = id; panelOpen = false; ficheSig = ''; if (map &
 function closeFiche(){ if (openId===null) return; openId = null; ficheSig = ''; $('fiche').style.display='none'; closeMenu(); renderBoard(); }
 function refreshFiche(){ ficheSig=''; renderFiche(); renderMenu(); }
 function sigOf(r){
-  return JSON.stringify([metaTick, commentsTick, uploading, r.titre, g(r,'statut'), g(r,'prio'), g(r,'charge'), g(r,'description'), g(r,'checklist'), g(r,'echeance'), g(r,'responsables'), g(r,'personnes'), g(r,'pj'), g(r,'votes'),
-    ...FIELDS.filter(f=>f.kind==='tags').map(f=>L(r,f.key))]);
+  return JSON.stringify([metaTick, side.comments.tick, side.history.tick, moi, r.titre, g(r,'statut'), g(r,'prio'), g(r,'charge'), g(r,'description'), g(r,'checklist'), g(r,'echeance'), g(r,'responsables'), g(r,'personnes'), g(r,'pj'), g(r,'votes'), g(r,'votants'),
+    g(r,'creePar'), g(r,'creeLe'), g(r,'modifPar'), g(r,'modifLe'), ...FIELDS.filter(f=>f.kind==='tags').map(f=>L(r,f.key))]);
 }
 function summaryHtml(r){
   const sg = (lbl, inner) => `<div class="sg"><div class="lbl">${lbl}</div><div class="vals">${inner}</div></div>`;
@@ -978,22 +1080,36 @@ function summaryHtml(r){
   });
   return h || '<span class="none">Aucune valeur : utilisez les boutons ci-dessus.</span>';
 }
+function historyHtml(r){
+  const S = side.history;
+  if (S.ok===null) return '<div class="none">Chargement…</div>';
+  if (S.ok===false) return `<div class="none">Table « ${TABLES.history.table} » inutilisable (${esc(S.note)}). Voir le guide.</div>`;
+  const list = historyOf(r.id).sort((a,b)=>(a.date&&b.date) ? (b.date-a.date) : (b.id-a.id));
+  if (!list.length) return '<div class="none">Aucun changement enregistré.</div>';
+  return list.slice(0,40).map(h=>{
+    const ev = h.event==='Création' ? 'Création de la tâche' : `${esc(h.event)} : <span class="hv">${esc(h.before||'∅')}</span> → <span class="hv">${esc(h.after||'∅')}</span>`;
+    return `<div class="hl"><span class="hd">${h.date?esc(fmtDateTime(h.date)):''}</span> · <b>${esc(who(h.author||h.email)||'—')}</b> · ${ev}</div>`;
+  }).join('') + (list.length>40 ? `<div class="none">… et ${list.length-40} entrée(s) plus anciennes</div>` : '') +
+    '<div class="none" style="margin-top:6px">Seuls les changements faits depuis ce widget sont enregistrés.</div>';
+}
 function commentsHtml(r){
-  if (commentsOk === false) return `<div class="none">La table « ${COMMENTS.table} » n'est pas utilisable (${esc(commentsNote)}). Voir le guide pour la créer.</div>`;
-  if (commentsOk === null) return '<div class="none">Chargement…</div>';
-  const list = commentsOf(r.id).sort((a,b)=>(a.date?+a.date:a.id)-(b.date?+b.date:b.id));
+  const S = side.comments;
+  if (S.ok === false) return `<div class="none">La table « ${TABLES.comments.table} » n'est pas utilisable (${esc(S.note)}). Voir le guide pour la créer.</div>`;
+  if (S.ok === null) return '<div class="none">Chargement…</div>';
+  const list = commentsOf(r.id).sort((a,b)=>(a.date&&b.date) ? (a.date-b.date) : (a.id-b.id));
   const kids = pid => list.filter(c=>(c.parent||0)===pid);
-  const one = (c, depth)=>`<div class="cm"><div class="av" title="${esc(c.author)}">${esc(initials(c.author||'?'))}</div><div class="cb">
-      <div class="ch"><b>${esc(c.author||'Anonyme')}</b> · ${c.date?esc(fmtDateTime(c.date)):''}</div>
+  const one = c=>{ const nm = who(c.author||c.email); return `<div class="cm"><div class="av" title="${esc(nm)}">${esc(initials(nm||'?'))}</div><div class="cb">
+      <div class="ch"><b>${esc(nm||'Anonyme')}</b>${c.date?' · '+esc(fmtDateTime(c.date)):''}</div>
       <div class="ct">${mentionHtml(c.text)}</div>
       <div class="ca"><button data-reply="${c.id}">Répondre</button><button data-delc="${c.id}">Supprimer</button></div>
       <div id="rp-${c.id}" style="display:none"><textarea class="cmt" data-draft="reply-${c.id}" placeholder="Votre réponse… (@ pour citer quelqu'un)">${esc(drafts['reply-'+c.id]||'')}</textarea>
         <div class="row"><button class="btn ghost" data-at="reply-${c.id}" data-anchor="at-reply-${c.id}">@</button><button class="btn" data-send="${c.id}">Répondre</button></div></div>
-      <div class="rep">${kids(c.id).map(k=>one(k,depth+1)).join('')}</div></div></div>`;
+      <div class="rep">${kids(c.id).map(one).join('')}</div></div></div>`; };
   const top = kids(0).concat(list.filter(c=>c.parent && !list.some(p=>p.id===c.parent)));   // réponses orphelines affichées en haut
-  return `${top.map(c=>one(c,0)).join('') || '<div class="none">Aucun commentaire.</div>'}
+  return `${top.map(one).join('') || '<div class="none">Aucun commentaire.</div>'}
     <div style="margin-top:12px"><textarea class="cmt" data-draft="new" placeholder="Écrire un commentaire… (@ pour citer quelqu'un)">${esc(drafts['new']||'')}</textarea>
-      <div class="row"><button class="btn ghost" data-at="new" data-anchor="at-new">@ Citer</button><span class="grow"></span><button class="btn" id="cm-send">Publier</button></div></div>`;
+      <div class="row"><button class="btn ghost" data-at="new" data-anchor="at-new">@ Citer</button><span class="grow"></span><button class="btn" id="cm-send">Publier</button></div>
+      ${meObj()?'':'<div class="none">Choisissez « Moi » en haut de la vue pour signer vos commentaires.</div>'}</div>`;
 }
 function atMenu(draftKey){
   return ()=>({ html: '<div class="mh">Citer une personne</div>' + (team.map(t=>`<div class="mi" data-at-p="${esc(t.label)}">@${esc(t.label)}</div>`).join('') || '<div class="mh" style="text-transform:none">Liste des personnes indisponible</div>'),
@@ -1012,10 +1128,17 @@ function renderFiche(){
   if (sig===ficheSig && f.innerHTML) return;            // rien n'a changé : on ne touche pas à la saisie en cours
   ficheSig = sig;
   const keepScroll = f.scrollTop;
+  const ae = document.activeElement;
+  const keep = (ae && f.contains(ae) && (ae.tagName==='TEXTAREA' || (ae.tagName==='INPUT' && ae.type==='text')) && (ae.id || (ae.dataset && ae.dataset.draft)))
+    ? {sel: ae.id ? '#'+ae.id : '[data-draft="'+ae.dataset.draft+'"]', v: ae.value, s: ae.selectionStart, e: ae.selectionEnd} : null;
   const id = r.id, cur = ()=>index.get(id);             // toujours la version la plus récente de la carte
 
   const dd = FIELDS.filter(fieldOn).map(fl=>`<button class="dd" data-anchor="fd-${fl.key}" data-dd="${fl.key}">${fl.label} ▾</button>`).join('');
-  const vote = map.votes ? `<button class="dd vote2" id="fp-vote">👍 ${g(r,'votes')||0}</button>` : '';
+  const vote = (map.votes||map.votants) ? `<button class="dd vote2 ${hasVoted(r)?'on':''}" id="fp-vote" title="${map.votants?(hasVoted(r)?'Retirer mon vote':'Voter (un vote par personne)'):'Voter'}">👍 ${voteCount(r)}</button>` : '';
+  const fm = [], cp = g(r,'creePar'), cl = toDate(g(r,'creeLe')), mp = g(r,'modifPar'), ml = toDate(g(r,'modifLe'));
+  if (cp || cl) fm.push('Créée'+(cl?' le '+esc(fmtDateTime(cl)):'')+(cp?' par '+esc(who(cp)):''));
+  if (mp || ml) fm.push('Modifiée'+(ml?' le '+esc(fmtDateTime(ml)):'')+(mp?' par '+esc(who(mp)):''));
+  const fmeta = fm.length ? `<div class="fmeta">${fm.join(' · ')}</div>` : '';
 
   const desc = map.description ? `<div class="sec"><div class="sh">📝 Description</div><textarea class="desc" id="fp-desc" placeholder="Ajouter une description plus détaillée…">${esc(g(r,'description')||'')}</textarea></div>` : '';
 
@@ -1036,29 +1159,31 @@ function renderFiche(){
     const ids = refIds(g(r,'pj'));
     pj = `<div class="sec"><div class="sh">📎 Pièces jointes<span class="sub">${ids.length||''}</span></div>
       ${ids.map(i=>`<div class="att"><span>📄</span><a data-dl="${i}" title="Ouvrir">${esc((attMeta[i]&&attMeta[i].name)||('Fichier '+i))}</a><span class="sz">${fmtSize(attMeta[i]&&attMeta[i].size)}</span><button class="del" data-rmatt="${i}" title="Retirer de la carte">×</button></div>`).join('')}
-      <div class="drop" id="fp-drop">${uploading?'Envoi en cours…':'<b>Glisser-déposer</b> un fichier ici<br>ou <b>cliquer pour le choisir</b>'}</div>
-      <input type="file" id="fp-file" multiple style="display:none"></div>`;
+      <div class="none">Pour ajouter un fichier : cellule « PJ » de la ligne dans Grist (ou widget « Carte » lié à cette vue). Un widget ne peut pas envoyer de fichier vers ce serveur Grist.</div></div>`;
   }
 
   f.innerHTML = `<div class="fhead"><input type="text" class="ftitle" id="f-title" value="${esc(r.titre)}" placeholder="Titre de la tâche"><button class="close" id="fclose" title="Fermer (Échap)">×</button></div>
-    <div class="fbody">
+    ${fmeta}<div class="fbody">
       <div class="tb">${dd}${vote}</div>
       <div class="summ">${summaryHtml(r)}</div>
       ${desc}
       <div class="sec"><div class="sh">☑ Checklist${clCount.total?`<span class="sub">${clCount.done}/${clCount.total}</span>`:''}</div>${checklist}</div>
       ${pj}
-      <div class="sec"><div class="sh">🗨️ Commentaires<span class="sub">${commentsOk?commentsOf(id).length:''}</span></div>${commentsHtml(r)}</div>
+      <div class="sec"><div class="sh">🗨️ Commentaires<span class="sub">${side.comments.ok?commentsOf(id).length:''}</span></div>${commentsHtml(r)}</div>
+      <div class="sec"><div class="sh">🕘 Historique<span class="sub">${side.history.ok?historyOf(id).length:''}</span></div>${historyHtml(r)}</div>
     </div>`;
   f.scrollTop = keepScroll;
+  if (keep){ const el = f.querySelector(keep.sel); if (el){ el.value = keep.v; el.focus(); try { el.setSelectionRange(keep.s, keep.e); } catch(e){} } }
 
   /* --- branchements --- */
   $('fclose').onclick = closeFiche;
-  $('f-title').onchange = e=>{ const v=e.target.value.trim(), c=cur(); if (c && v!==c.titre) update(c,{titre:v}); };
+  const saveTitle = ()=>{ const v=$('f-title').value.trim(), c=cur(); if (c && v && v!==c.titre) update(c,{titre:v}); };
+  $('f-title').onchange = saveTitle; $('f-title').onblur = saveTitle;
   f.querySelectorAll('[data-dd]').forEach(b=>b.onclick=()=>openMenu('fd-'+b.dataset.dd, fieldMenu(id, b.dataset.dd)));
-  const vt = $('fp-vote'); if (vt) vt.onclick = ()=>{ const c=cur(); if (c) update(c,{votes:(Number(g(c,'votes'))||0)+1}); };
+  const vt = $('fp-vote'); if (vt) vt.onclick = ()=>castVote(cur());
   f.querySelectorAll('[data-rm]').forEach(x=>x.onclick=()=>{ const c=cur(); if (c) removeValue(c, x.dataset.rm, x.dataset.val); });
   f.querySelectorAll('[data-rmresp]').forEach(x=>x.onclick=()=>{ const c=cur(); if (c) setField(c,'responsables',+x.dataset.rmresp); });
-  const ds = $('fp-desc'); if (ds) ds.onchange = ()=>{ const c=cur(); if (c) update(c,{description: ds.value}); };
+  const ds = $('fp-desc'); if (ds){ const saveDesc = ()=>{ const c=cur(); if (c && ds.value !== (g(c,'description')||'')) update(c,{description: ds.value}); }; ds.onchange = saveDesc; ds.onblur = saveDesc; }
 
   if (map.checklist){
     const edit = fn => { const c=cur(); if(!c) return; const {lines} = parseChecklist(g(c,'checklist')); fn(lines); update(c,{checklist: lines.join('\n')}); };
@@ -1078,14 +1203,11 @@ function renderFiche(){
   }
 
   if (map.pj){
-    const drop = $('fp-drop'), file = $('fp-file');
-    drop.onclick = ()=>file.click();
-    file.onchange = ()=>{ const c=cur(); if (c) uploadFiles(c, file.files); file.value=''; };
-    drop.ondragover = e=>{ e.preventDefault(); drop.classList.add('over'); };
-    drop.ondragleave = ()=>drop.classList.remove('over');
-    drop.ondrop = e=>{ e.preventDefault(); drop.classList.remove('over'); const c=cur(); if (c) uploadFiles(c, e.dataTransfer.files); };
     f.querySelectorAll('[data-dl]').forEach(a=>a.onclick=()=>downloadAttachment(+a.dataset.dl));
-    f.querySelectorAll('[data-rmatt]').forEach(b=>b.onclick=()=>{ const c=cur(); if(!c) return; const ids=refIds(g(c,'pj')).filter(i=>i!==+b.dataset.rmatt); update(c,{pj:ids},{pj:['L',...ids]}); });
+    f.querySelectorAll('[data-rmatt]').forEach(b=>b.onclick=()=>{
+      const c=cur(); if(!c) return; const rid=+b.dataset.rmatt, ids=refIds(g(c,'pj')).filter(i=>i!==rid);
+      update(c,{pj:ids},{pj:['L',...ids]},[{event:'Pièce jointe', before:(attMeta[rid]&&attMeta[rid].name)||('Fichier '+rid), after:'retirée'}]);
+    });
   }
 
   /* commentaires */
@@ -1128,11 +1250,17 @@ function wire(){
   document.querySelectorAll('[data-add]').forEach(b=>b.onclick=()=>openNewPop(b.dataset.add));
   document.querySelectorAll('[data-cplus]').forEach(b=>b.onclick=e=>{ e.stopPropagation(); const c = cardOf(b); if (c) openMenu(b.dataset.anchor, fieldPicker(c.id)); });
   document.querySelectorAll('.card [data-rm]').forEach(x=>x.onclick=e=>{ e.stopPropagation(); const c=cardOf(x); if (c) removeValue(c, x.dataset.rm, x.dataset.val); });
-  document.querySelectorAll('[data-vote]').forEach(b=>b.onclick=()=>{ const r = cardOf(b); update(r, {votes:(Number(g(r,'votes'))||0)+1}); });
+  document.querySelectorAll('[data-vote]').forEach(b=>b.onclick=()=>castVote(cardOf(b)));
   document.querySelectorAll('[data-tosuivi]').forEach(b=>b.onclick=()=>update(cardOf(b), {statut:'A faire'}));
   document.querySelectorAll('[data-tobacklog]').forEach(b=>b.onclick=()=>update(cardOf(b), {statut:null}));
 }
-document.addEventListener('click', e=>{ if (menu && !e.target.closest('#menu') && !e.target.closest('[data-anchor]')) closeMenu(); });
+document.addEventListener('click', e=>{
+  if (!menu) return;
+  // le menu est reconstruit pendant le clic : on regarde le chemin de l'événement, pas l'élément cliqué (déjà retiré de la page)
+  const path = (e.composedPath && e.composedPath()) || [];
+  const inside = path.some(n=>n && (n.id==='menu' || (n.dataset && n.dataset.anchor)));
+  if (!inside) closeMenu();
+});
 document.addEventListener('keydown', e=>{
   if (e.key!=='Escape') return;
   if (menu) closeMenu(); else if (manage) closeManage(); else if ($('pop').style.display==='block') closePop(); else closeFiche();
@@ -1142,7 +1270,7 @@ document.addEventListener('keydown', e=>{
 grist.ready({ columns: COLS, requiredAccess: 'full', allowSelectBy: true });
 grist.onOptions(o=>{
   if (o && o.mode) mode = o.mode;
-  if (o && o.moi !== undefined) moi = o.moi;
+  if (o && o.group) grp = o.group;
   if (o && o.colors) colors = {groups:o.colors.groups||{}, tags:o.colors.tags||{}};
   if (o && o.order) colOrder = o.order;
   if (o && o.orange != null) thr.orange = Number(o.orange);
@@ -1153,12 +1281,12 @@ let commentsStarted = false;
 grist.onRecords(async (recs, mappings)=>{
   nCalls++; lastCall = new Date().toLocaleTimeString('fr-FR')+' – '+((recs||[]).length)+' ligne(s)';
   map = mappings ? {...mappings} : null;
-  if (map && map.responsables && !map.personnes) map.personnes = '@Equipe';   // noms déduits de la référence
+  if (map && map.responsables) map.personnes = '@Equipe';   // noms toujours déduits de la référence (la colonne texte éventuelle est ignorée)
   if (!host){ try { host = await grist.selectedTable.getTableId(); } catch(e){ host = null; } }
   rawRecs = recs || []; rawFirst = rawRecs[0] || null;
   ingest();
   ensureMeta();
-  if (!commentsStarted && host){ commentsStarted = true; loadComments(); setInterval(()=>{ if (!document.hidden) loadComments(); }, COMMENTS_POLL_MS); }
+  if (!commentsStarted && host){ commentsStarted = true; loadSide(); setInterval(()=>{ if (!document.hidden) loadSide(); }, SIDE_POLL_MS); }
 });
 </script>
 </body>
