@@ -14,6 +14,7 @@
   .hrow { display:flex; flex-wrap:wrap; gap:6px; align-items:center; }
   header select, header input { font:inherit; padding:4px 6px; border:1px solid #ccc; border-radius:4px; background:#fff; max-width:150px; }
   header input[type=search] { width:140px; }
+  .flbl { color:var(--muted); font-size:12px; }
   header label { color:var(--muted); font-size:12px; display:flex; align-items:center; gap:3px; }
   header button, .fb { font:inherit; border:1px solid #ccc; background:#fff; border-radius:4px; padding:4px 8px; cursor:pointer; }
   .fb.active { background:var(--accent-bg); border-color:var(--accent); color:#2b3a9a; font-weight:700; }
@@ -94,6 +95,11 @@
   #fiche input[type=text], #fiche textarea, #modal input[type=text], #modal select, #menu input[type=text], #menu input[type=date] { font:inherit; padding:7px 9px; border:1px solid #ccc; border-radius:6px; background:#fff; min-width:0; max-width:100%; }
   #fiche textarea { width:100%; resize:vertical; line-height:1.45; }
   #fiche textarea.desc { min-height:190px; }
+  .mdview { border:1px solid transparent; border-radius:6px; padding:8px; min-height:48px; cursor:text; line-height:1.45; overflow-wrap:anywhere; }
+  .mdview:hover { background:#f7f8fc; border-color:#dde3f5; }
+  .mdview p { margin:0 0 8px; } .mdview ul, .mdview ol { margin:4px 0 8px 22px; padding:0; } .mdview a { color:var(--accent); text-decoration:underline; }
+  .mdbar { display:flex; gap:6px; margin:0 0 6px; flex-wrap:wrap; align-items:center; }
+  .mdbar .btn { padding:2px 10px; }
   #fiche textarea.cmt { min-height:58px; }
   .btn { font:inherit; border:1px solid var(--accent); background:var(--accent); color:#fff; border-radius:6px; padding:6px 12px; cursor:pointer; }
   .btn.soft { background:var(--accent-bg); color:#2b3a9a; border-color:var(--accent-bg); font-weight:600; }
@@ -172,7 +178,7 @@
 
 <script>
 /* ============ CONFIGURATION ============ */
-const VERSION = '2026-11-02 i';   // affichée dans le bandeau et le diagnostic : permet de vérifier que le bon fichier est chargé
+const VERSION = '2026-11-02 k';   // affichée dans le bandeau et le diagnostic : permet de vérifier que le bon fichier est chargé
 const STATUTS = ['A faire','En cours','Bloqué','A valider','Terminé','Abandonné','Archivé'];
 const PRIOS   = ['P0 Critique','P1 Important','P2 Souhaitable','P3 Appréciable','Nouveau','Relégué','Abandonné','Déjà prévu'];
 const CHARGES = ['XS','S','M','L','XL'];
@@ -256,6 +262,7 @@ let mode = 'suivi';            // suivi | backlog | perso
 let moi = lsGet('moi','');   // personne qui utilise CE navigateur (mémorisée dans le navigateur, pas partagée)
 let grpBy = {suivi:'statut', perso:'statut', backlog:'prio'};   // regroupement des colonnes, par vue
 let askedMe = false, askResolve = null;   // question « Qui êtes-vous ? »
+let descEdit = null;          // carte dont la description est en cours de modification
 let delConfirm = null;        // carte dont la suppression attend confirmation
 let sortPref = lsGet('sort', []);   // critères de tri (propres à ce navigateur)
 let map = null;                // association des colonnes
@@ -276,6 +283,8 @@ let attMeta = {};              // id de pièce jointe -> {name, size}
 const mkSide = ()=>({rows:[], ok:null, note:'', tick:0, sig:'', cols:null, fill:new Set()});
 const side = {comments: mkSide(), history: mkSide()};   // tables annexes
 let histNote = '';
+let flashNote = '', flashTimer = null;   // message d'erreur visible dans la page
+function flash(msg){ flashNote = msg; clearTimeout(flashTimer); flashTimer = setTimeout(()=>{ flashNote = ''; renderWarn(); }, 25000); renderWarn(); }
 let drafts = {};               // brouillons de commentaires
 let menu = null;               // menu déroulant ouvert : {anchor, build}
 let manage = null;             // fenêtre "gérer les valeurs" : {key, confirm, msg}
@@ -284,6 +293,28 @@ const F = {statut:[],prio:[],charge:[],personas:[],themes:[],personne:[],produit
 
 /* ============ OUTILS ============ */
 const esc = s => String(s ?? '').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+/* Mise en forme légère de la description : **gras**, listes (- ou 1.), liens http(s). Le texte est d'abord échappé : aucun HTML saisi n'est interprété. */
+function mdInline(t){   // t est déjà échappé
+  const A = u => `<a href="${u}" target="_blank" rel="noopener noreferrer">`;
+  return t.replace(/\[([^\]\n]+)\]\((https?:\/\/[^\s)]+)\)|(https?:\/\/[^\s<]+)|\*\*(.+?)\*\*/g, (m, lt, lu, bu, b)=>{
+    if (lu) return A(lu)+lt+'</a>';
+    if (bu){ const tail = (bu.match(/(?:[.,;:!?)\]]|&quot;|&#39;)+$/)||[''])[0], u = bu.slice(0, bu.length-tail.length); return A(u)+u+'</a>'+tail; }
+    return '<strong>'+mdInline(b)+'</strong>';
+  });
+}
+function mdHtml(src){
+  const lines = String(src||'').replace(/\r/g,'').split('\n'); let out = '', list = null, para = [];
+  const flushP = ()=>{ if (para.length){ out += '<p>'+para.map(l=>mdInline(esc(l))).join('<br>')+'</p>'; para = []; } };
+  const closeL = ()=>{ if (list){ out += list==='ul' ? '</ul>' : '</ol>'; list = null; } };
+  for (const l of lines){
+    let m;
+    if ((m = l.match(/^\s*[-*•]\s+(.*)$/))){ flushP(); if (list!=='ul'){ closeL(); out += '<ul>'; list = 'ul'; } out += '<li>'+mdInline(esc(m[1]))+'</li>'; }
+    else if ((m = l.match(/^\s*\d+[.)]\s+(.*)$/))){ flushP(); if (list!=='ol'){ closeL(); out += '<ol>'; list = 'ol'; } out += '<li>'+mdInline(esc(m[1]))+'</li>'; }
+    else if (!l.trim()){ flushP(); closeL(); }
+    else { closeL(); para.push(l); }
+  }
+  flushP(); closeL(); return out;
+}
 function toList(v){
   if (v == null || v === '') return [];
   if (Array.isArray(v)) return (v[0]==='L' ? v.slice(1) : v).map(String).filter(Boolean);
@@ -490,7 +521,7 @@ function commentCount(r){ return side.comments.ok ? commentsOf(r.id).length : (N
 async function addComment(taskId, parentId, text){
   text = String(text||'').trim(); if (!text) return false;
   await maybeAsk('Pour signer votre commentaire.');
-  const c = side.comments.cols; if (!c){ alert('Table « '+TABLES.comments.table+' » inutilisable : '+side.comments.note); return false; }
+  const c = side.comments.cols; if (!c){ flash('Table « '+TABLES.comments.table+' » inutilisable : '+side.comments.note); return false; }
   const f = {[c.task]: taskId, [c.text]: text};
   if (parentId && c.parent) f[c.parent] = parentId;
   const ids = team.filter(p=>text.includes('@'+p.label)).map(p=>p.id);
@@ -535,12 +566,36 @@ async function update(card, changes, encoded, extraLog){
     else { res = await actRes(main); if (res) histNote = "Le journal n'a pas pu être enregistré : vérifiez la table « Historique » (droits, colonnes)."; }
   } else res = await actRes(main);
   if (!res){ pending.delete(card.id); ingest(); return false; }
+  verifyWrite(card.id, applied, cols);
   return true;
 }
+/* Contrôle : Grist a-t-il vraiment gardé la modification ? (une formule déclenchée ou une règle peut la remplacer) */
+const VERIFY_KEYS = ['responsables','votants','statut','prio','charge'];
+const verifyTok = {};
+async function verifyWrite(id, applied, cols){
+  const ks = VERIFY_KEYS.filter(k=>k in applied && map[k]); if (!ks.length || !host) return;
+  const tok = verifyTok[id] = (verifyTok[id]||0) + 1;
+  await new Promise(r=>setTimeout(r, 1800));
+  if (verifyTok[id]!==tok) return;                       // une modification plus récente est en cours : on ne compare pas
+  try {
+    const t = await grist.docApi.fetchTable(host), i = (t.id||[]).indexOf(id);
+    if (i<0 || verifyTok[id]!==tok) return;
+    const flat = v => (Array.isArray(v) ? (v[0]==='L' ? v.slice(1) : v) : [v]).filter(x=>x!=null && x!=='' && x!==0).map(String).sort().join('|');
+    for (const k of ks){
+      const col = map[k]; if (!(col in t)) continue;
+      if (flat(t[col][i]) !== flat(cols[col])){
+        const lab = (FIELDS.find(f=>f.key===k)||{label:k}).label;
+        const shown = k==='responsables' || k==='votants' ? refIds(t[col][i]).map(x=>teamById[x]||('#'+x)).join(', ') : valLabel({}, k, t[col][i]);
+        flash("Grist n'a pas conservé votre modification (« "+lab+" »). Valeur actuelle dans la table : « "+(shown||'vide')+" ». Une formule déclenchée sur cette colonne, une règle d'accès ou un type de colonne différent la remplace probablement.");
+        return;
+      }
+    }
+  } catch(e){}
+}
 async function actRes(actions, quiet){
-  if (!host){ if (!quiet) alert("Table du widget introuvable : rechargez la page."); return null; }
+  if (!host){ if (!quiet) flash("Table du widget introuvable : rechargez la page."); return null; }
   try { return (await grist.docApi.applyUserActions(actions)) || {retValues:[]}; }
-  catch(e){ if (!quiet) alert('Action refusée ou impossible : ' + ((e && e.message) || e)); return null; }
+  catch(e){ if (!quiet) flash('Action refusée ou impossible : ' + ((e && e.message) || e)); return null; }
 }
 async function act(actions){ return !!(await actRes(actions)); }
 
@@ -677,7 +732,7 @@ async function createAndSet(card, key, name){
   name = String(name||'').trim(); if (!name) return;
   if (key==='responsables'){
     try { const id = await createPerson(name); if (typeof id==='number' && !refIds(card.responsables).includes(id)) await setField(card,key,id); }
-    catch(e){ alert('Création impossible : '+((e&&e.message)||e)); }
+    catch(e){ flash('Création impossible : '+((e&&e.message)||e)); }
     return;
   }
   if (FIELDS.find(f=>f.key===key).kind==='tags' || true){ await addChoice(key, name); }
@@ -953,12 +1008,14 @@ function renderHeader(){
       const names = team.length ? team.map(t=>t.label) : [...new Set(records.flatMap(r=>L(r,'personnes')))].sort((a,b)=>a.localeCompare(b,'fr'));
       r1 += `<label title="Votre nom : sert à filtrer vos tâches (mémorisé sur cet ordinateur)">Moi <select id="f-moi"><option value="">— tout le monde —</option>${names.map(n=>`<option ${n===moi?'selected':''}>${esc(n)}</option>`).join('')}</select></label>`;
     }
+    let fl = '';
     FILTERS.forEach(f=>{
       if (f.skipIn===mode) return;
       if (f.key==='personnes' ? !(map.responsables||map.personnes) : !has(f.key)) return;
       const n = F[f.id].length;
-      r1 += `<button class="fb ${n?'active':''}" data-anchor="f-${f.id}" data-fbtn="${f.id}">${f.label}${n?` (${n})`:''} ▾</button>`;
+      fl += `<button class="fb ${n?'active':''}" data-anchor="f-${f.id}" data-fbtn="${f.id}">${f.label}${n?` (${n})`:''} ▾</button>`;
     });
+    if (fl) r1 += `<span class="flbl">Filtrer</span>` + fl;
     if (has('echeance')) r2 += `<label>Échéance du <input type="date" id="f-from" value="${F.from}"></label><label>au <input type="date" id="f-to" value="${F.to}"></label>`;
     const ns = sortPref.filter(s=>s && s.k).length;
     r2 += `<button class="fb ${ns?'active':''}" data-anchor="sort" id="sortBtn" title="Trier les cartes de chaque colonne">Tri${ns?` (${ns})`:''} ▾</button>`;
@@ -995,7 +1052,9 @@ function renderWarn(){
     }
   }
   if (histNote) parts.push(`<div class="warn">${esc(histNote)}</div>`);
+  if (flashNote) parts.push(`<div class="warn" id="flash"><b>⚠</b> ${esc(flashNote)} <span class="lnk" id="flash-x" style="display:inline;cursor:pointer">Fermer</span></div>`);
   $('warn').innerHTML = parts.join('');
+  const fx = $('flash-x'); if (fx) fx.onclick = ()=>{ flashNote = ''; renderWarn(); };
 }
 async function loadTableCount(){
   try { const t = await grist.docApi.fetchTable(host); tableCount = (t.id||[]).length; } catch(e){ tableCount = 'erreur : '+((e&&e.message)||e); }
@@ -1149,15 +1208,15 @@ async function downloadAttachment(id){
     const a = document.createElement('a');
     a.href = `${tok.baseUrl}/attachments/${id}/download?auth=${encodeURIComponent(tok.token)}`; a.target='_blank'; a.rel='noopener';
     document.body.appendChild(a); a.click(); a.remove();
-  } catch(e){ alert("Ouverture impossible : "+((e&&e.message)||e)); }
+  } catch(e){ flash("Ouverture impossible : "+((e&&e.message)||e)); }
 }
 
 /* ============ FICHE DE LA CARTE (version compacte) ============ */
-function openFiche(id){ openId = id; delConfirm = null; panelOpen = false; ficheSig = ''; if (map && map.pj) loadAttachMeta(); render(); }
-function closeFiche(){ if (openId===null) return; openId = null; delConfirm = null; ficheSig = ''; $('fiche').style.display='none'; closeMenu(); renderBoard(); }
+function openFiche(id){ openId = id; delConfirm = null; descEdit = null; panelOpen = false; ficheSig = ''; if (map && map.pj) loadAttachMeta(); render(); }
+function closeFiche(){ if (openId===null) return; openId = null; delConfirm = null; descEdit = null; ficheSig = ''; $('fiche').style.display='none'; closeMenu(); renderBoard(); }
 function refreshFiche(){ ficheSig=''; renderFiche(); renderMenu(); }
 function sigOf(r){
-  return JSON.stringify([metaTick, delConfirm===r.id, side.comments.tick, side.history.tick, moi, r.titre, g(r,'statut'), g(r,'prio'), g(r,'charge'), g(r,'description'), g(r,'checklist'), g(r,'echeance'), g(r,'responsables'), g(r,'personnes'), g(r,'pj'), g(r,'votes'), g(r,'votants'),
+  return JSON.stringify([metaTick, delConfirm===r.id, descEdit===r.id, side.comments.tick, side.history.tick, moi, r.titre, g(r,'statut'), g(r,'prio'), g(r,'charge'), g(r,'description'), g(r,'checklist'), g(r,'echeance'), g(r,'responsables'), g(r,'personnes'), g(r,'pj'), g(r,'votes'), g(r,'votants'),
     g(r,'creePar'), g(r,'creeLe'), g(r,'modifPar'), g(r,'modifLe'), isDel(r), ...FIELDS.filter(f=>f.kind==='tags').map(f=>L(r,f.key))]);
 }
 function summaryHtml(r){
@@ -1245,7 +1304,17 @@ function renderFiche(){
     : (soft && !inTrash) ? `<div class="sec"><button class="btn ghost" id="fp-trash" title="La tâche reste dans la table et peut être restaurée">🗑 Mettre à la corbeille</button></div>`
     : `<div class="sec"><button class="btn ghost" id="fp-del">🗑 ${soft?'Supprimer définitivement…':'Supprimer la tâche'}</button></div>`;
 
-  const desc = map.description ? `<div class="sec"><div class="sh">📝 Description</div><textarea class="desc" id="fp-desc" placeholder="Ajouter une description plus détaillée…">${esc(g(r,'description')||'')}</textarea></div>` : '';
+  let desc = '';
+  if (map.description){
+    const dtxt = g(r,'description') || '';
+    desc = descEdit===r.id
+      ? `<div class="sec"><div class="sh">📝 Description</div>
+          <div class="mdbar"><button class="btn ghost" data-md="bold" title="Mettre en gras (ou insérer **texte**)"><b>G</b> Gras</button><button class="btn ghost" data-md="list" title="Liste à puces">• Liste</button><button class="btn ghost" data-md="link" title="Insérer un lien">🔗 Lien</button><span class="none">Échap : terminer</span></div>
+          <textarea class="desc" id="fp-desc" placeholder="Ajouter une description plus détaillée…">${esc(dtxt)}</textarea>
+          <div class="none">Mise en forme : **gras** · « - » en début de ligne pour une liste · https://… pour un lien, ou [texte](https://…)</div></div>`
+      : `<div class="sec"><div class="sh">📝 Description<button class="btn ghost" id="fp-descedit" style="margin-left:auto" title="Modifier la description">✎ Modifier</button></div>
+          <div class="mdview" id="fp-descv">${dtxt.trim() ? mdHtml(dtxt) : '<span class="none">Ajouter une description plus détaillée…</span>'}</div></div>`;
+  }
 
   let checklist;
   const clCount = map.checklist ? checklistCount(g(r,'checklist')) : {done:0,total:0};
@@ -1296,7 +1365,28 @@ function renderFiche(){
   const dk = $('fp-delok'); if (dk) dk.onclick = ()=>deleteTask(cur());
   f.querySelectorAll('[data-rm]').forEach(x=>x.onclick=()=>{ const c=cur(); if (c) removeValue(c, x.dataset.rm, x.dataset.val); });
   f.querySelectorAll('[data-rmresp]').forEach(x=>x.onclick=()=>{ const c=cur(); if (c) setField(c,'responsables',+x.dataset.rmresp); });
-  const ds = $('fp-desc'); if (ds){ const saveDesc = ()=>{ const c=cur(); if (c && ds.value !== (g(c,'description')||'')) update(c,{description: ds.value}); }; ds.onchange = saveDesc; ds.onblur = saveDesc; }
+  const startEdit = ()=>{ descEdit = id; refreshFiche(); };
+  const de = $('fp-descedit'); if (de) de.onclick = startEdit;
+  const dv = $('fp-descv'); if (dv) dv.onclick = e=>{ if (e.target.closest('a')) return; if (window.getSelection && String(window.getSelection())) return; startEdit(); };
+  const ds = $('fp-desc');
+  if (ds){
+    const saveDesc = ()=>{ const c=cur(); if (c && ds.value !== (g(c,'description')||'')) update(c,{description: ds.value}); };
+    const endEdit = ()=>{ const wasEditing = descEdit===id; saveDesc(); descEdit = null; if (wasEditing) refreshFiche(); };
+    ds.onchange = saveDesc;
+    ds.onblur = ()=>setTimeout(()=>{ if (!ds.isConnected || document.activeElement===ds) return; if (descEdit===id) endEdit(); }, 0);   // champ remplacé par une reconstruction de la fiche : on reste en modification
+    ds.onkeydown = e=>{ if (e.key==='Escape'){ e.preventDefault(); e.stopPropagation(); endEdit(); } };
+    f.querySelectorAll('[data-md]').forEach(b=>{
+      b.onmousedown = e=>e.preventDefault();               // garde le curseur dans le champ
+      b.onclick = ()=>{
+        const a = ds.selectionStart, z = ds.selectionEnd, v = ds.value, sel = v.slice(a,z);
+        if (b.dataset.md==='bold'){ ds.setRangeText('**'+(sel||'texte')+'**', a, z, 'end'); if (!sel){ ds.selectionStart = a+2; ds.selectionEnd = a+7; } }
+        else if (b.dataset.md==='link'){ const t = '['+(sel||'texte')+'](https://)'; ds.setRangeText(t, a, z, 'end'); if (sel){ const p = a + t.length - 9; ds.selectionStart = p; ds.selectionEnd = p+8; } else { ds.selectionStart = a+1; ds.selectionEnd = a+6; } }
+        else { const s0 = v.lastIndexOf('\n', a-1)+1, s1 = (z>a && v[z-1]==='\n') ? z-1 : z; const blk = v.slice(s0, s1).split('\n').map(l=>/^\s*[-*•]\s/.test(l) ? l : '- '+l).join('\n'); ds.setRangeText(blk, s0, s1, 'end'); }
+        ds.focus();
+      };
+    });
+    if (descEdit===id && !keep){ ds.focus(); ds.selectionStart = ds.selectionEnd = ds.value.length; }
+  }
 
   if (map.checklist){
     const edit = fn => { const c=cur(); if(!c) return; const {lines} = parseChecklist(g(c,'checklist')); fn(lines); update(c,{checklist: lines.join('\n')}); };
@@ -1308,6 +1398,7 @@ function renderFiche(){
     f.querySelectorAll('[data-cl-del]').forEach(b=>b.onclick=()=>edit(lines=>lines.splice(+b.dataset.clDel,1)));
     const addItem = ()=>{
       const v=$('cl-add').value.trim(); if(!v) return;
+      $('cl-add').value = '';          // sinon la saisie précédente est recopiée dans le champ reconstruit
       edit(lines=>{ while(lines.length && lines[lines.length-1].trim()==='') lines.pop(); lines.push('- [ ] '+v); });
       setTimeout(()=>{ const e=$('cl-add'); if(e) e.focus(); }, 0);
     };
