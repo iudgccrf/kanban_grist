@@ -178,7 +178,7 @@
 
 <script>
 /* ============ CONFIGURATION ============ */
-const VERSION = '2026-11-02 k';   // affichée dans le bandeau et le diagnostic : permet de vérifier que le bon fichier est chargé
+const VERSION = '2026-11-02 l';   // affichée dans le bandeau et le diagnostic : permet de vérifier que le bon fichier est chargé
 const STATUTS = ['A faire','En cours','Bloqué','A valider','Terminé','Abandonné','Archivé'];
 const PRIOS   = ['P0 Critique','P1 Important','P2 Souhaitable','P3 Appréciable','Nouveau','Relégué','Abandonné','Déjà prévu'];
 const CHARGES = ['XS','S','M','L','XL'];
@@ -323,7 +323,11 @@ function toList(v){
 function refIds(v){   // identifiants de lignes d'une colonne Référence / Liste de références
   if (v == null || v === '' || v === 0) return [];
   const arr = Array.isArray(v) ? (v[0]==='L' ? v.slice(1) : v) : [v];
-  return arr.map(x=> (x && typeof x==='object') ? (x.rowId ?? x.id) : x).filter(x=>typeof x==='number' && x>0);
+  return arr.map(x=>{
+    if (x && typeof x==='object') return x.rowId ?? x.id;
+    if (typeof x==='string' && x.trim()){ const t = x.trim(), n = norm(t); const p = team.find(q=>q.label===t) || team.find(q=>norm(q.label)===n); return p ? p.id : null; }   // texte affiché → identifiant
+    return x;
+  }).filter(x=>typeof x==='number' && x>0);
 }
 function g(r,k){ return map && map[k] ? r[k] : undefined; }
 const isDel = r => !!(map && map.supprimee && r && r.supprimee);                        // tâche à la corbeille
@@ -1051,6 +1055,11 @@ function renderWarn(){
       parts.push(`<div class="info">${t} <span style="opacity:.6">(widget v${VERSION})</span></div>`);
     }
   }
+  if (map && map.responsables){
+    const filled = v => Array.isArray(v) ? v.some(x=>x!=null && x!=='' && x!=='L' && x!==0) : (v!=null && v!=='' && v!==0);
+    const bad = records.filter(r=>!isDel(r) && filled(r.responsables) && !refIds(r.responsables).length);
+    if (bad.length) parts.push(`<div class="warn"><b>⚠</b> ${bad.length} tâche(s) ont un responsable que le widget ne sait pas lire (exemple : « ${esc(JSON.stringify(bad[0].responsables)).slice(0,80)} »). Vérifiez que la personne existe dans la table Equipe et envoyez-moi cet exemple.</div>`);
+  }
   if (histNote) parts.push(`<div class="warn">${esc(histNote)}</div>`);
   if (flashNote) parts.push(`<div class="warn" id="flash"><b>⚠</b> ${esc(flashNote)} <span class="lnk" id="flash-x" style="display:inline;cursor:pointer">Fermer</span></div>`);
   $('warn').innerHTML = parts.join('');
@@ -1493,7 +1502,7 @@ grist.onRecords(async (recs, mappings)=>{
   ingest();
   ensureMeta();
   if (!commentsStarted && host){ commentsStarted = true; loadSide(); setInterval(()=>{ if (!document.hidden) loadSide(); }, SIDE_POLL_MS); }
-});
+}, {expandRefs:false});   // par défaut Grist renvoie le TEXTE affiché des références ; il nous faut les identifiants de lignes
 </script>
 </body>
 </html>
