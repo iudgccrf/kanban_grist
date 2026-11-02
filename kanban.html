@@ -10,7 +10,8 @@
   * { box-sizing:border-box; }
   html, body { height:100%; }
   body { margin:0; font-family:"Marianne","Segoe UI",Arial,sans-serif; background:var(--bg); color:var(--txt); font-size:13px; display:flex; flex-direction:column; overflow:hidden; }
-  header { flex:none; background:#fff; border-bottom:1px solid #ddd; padding:6px 12px; display:flex; flex-wrap:wrap; gap:6px; align-items:center; }
+  header { flex:none; background:#fff; border-bottom:1px solid #ddd; padding:6px 12px; display:flex; flex-direction:column; gap:6px; align-items:stretch; }
+  .hrow { display:flex; flex-wrap:wrap; gap:6px; align-items:center; }
   header select, header input { font:inherit; padding:4px 6px; border:1px solid #ccc; border-radius:4px; background:#fff; max-width:150px; }
   header input[type=search] { width:140px; }
   header label { color:var(--muted); font-size:12px; display:flex; align-items:center; gap:3px; }
@@ -154,6 +155,9 @@
   .vote.on, .dd.vote2.on { background:var(--accent-bg); border-color:var(--accent); color:#2b3a9a; font-weight:700; }
   .warnc { color:#b25e00; cursor:help; }
   #menu select { font:inherit; padding:5px 6px; border:1px solid #ccc; border-radius:5px; background:#fff; flex:1; min-width:0; }
+  .acts { display:flex; align-items:center; gap:10px; margin:10px 0 0; }
+  .btn.danger { background:#c0392b; border-color:#c0392b; color:#fff; }
+  #pop select { font:inherit; padding:5px 6px; border:1px solid #ccc; border-radius:4px; flex:1; min-width:0; }
 </style>
 </head>
 <body>
@@ -168,13 +172,18 @@
 
 <script>
 /* ============ CONFIGURATION ============ */
-const VERSION = '2026-10-30 g';   // affichée dans le bandeau et le diagnostic : permet de vérifier que le bon fichier est chargé
+const VERSION = '2026-11-02 i';   // affichée dans le bandeau et le diagnostic : permet de vérifier que le bon fichier est chargé
 const STATUTS = ['A faire','En cours','Bloqué','A valider','Terminé','Abandonné','Archivé'];
-const PRIOS   = ['P0 Critique','P1 Important','P2 Souhaitable','P3 Appréciable','Nouveau','Abandonné','Déjà prévu'];
+const PRIOS   = ['P0 Critique','P1 Important','P2 Souhaitable','P3 Appréciable','Nouveau','Relégué','Abandonné','Déjà prévu'];
 const CHARGES = ['XS','S','M','L','XL'];
 const STATUT_TERMINE = ['Terminé','Archivé'];   // dates affichées en vert
 const STATUT_COLORS = ['#1e9ac8','#9bbf5a','#e5484d','#f5a623','#17b3a3','#8a8f98','#555b66'];
-const PRIO_COLORS   = ['#e5484d','#f5a623','#1e9ac8','#6b8fb8','#9bbf5a','#8a8f98','#555b66'];
+const PRIO_COLORS   = ['#e5484d','#f5a623','#1e9ac8','#6b8fb8','#9bbf5a','#b08968','#8a8f98','#555b66'];
+const CHARGE_COLORS = ['#9bbf5a','#1e9ac8','#f5a623','#e5484d','#8a4fbf'];
+// Règles du Backlog
+const PRIO_GROOMEE = /^P[0-3]\b/;                 // prio « travaillée » (P0 à P3)
+const PRIO_RELEGUE = 'Relégué', PRIO_NOUVEAU = 'Nouveau';
+const GROUP_LABELS = {statut:'Statut', prio:'Prio', charge:'Charge'};
 const PALETTE = [['#fdf1c4','#6b5a10'],['#fcd9d9','#8a2b2b'],['#d6eef7','#1f5f78'],['#dcebd9','#355a2f'],
                  ['#e8dcf5','#59397a'],['#ffe2c9','#8a4a12'],['#d9ecec','#245f5f'],['#ffd9e8','#8a2b55']];
 const PRIO_TAG = [[/^P0/,['#fcd9d9','#b3202f']],[/^P1/,['#fff0c2','#8a5a00']],[/^P2/,['#d6eef7','#1f5f78']],[/^P3/,['#dde6f2','#3b5a80']]];
@@ -203,16 +212,16 @@ const FIELDS = [
   {key:'echeance',     label:'Échéance',     kind:'date'},
 ];
 // Filtres (tous à choix multiples)
-const FILTERS = [
-  {id:'statut',     key:'statut',    label:'Statut',    skipIn:'backlog'},
-  {id:'prio',       key:'prio',      label:'Prio',      skipIn:'backlog'},
+const FILTERS = [   // dans l'ordre d'affichage de la barre du haut
+  {id:'prio',       key:'prio',      label:'Prio'},
   {id:'charge',     key:'charge',    label:'Charge'},
+  {id:'statut',     key:'statut',    label:'Statut',    skipIn:'backlog'},
+  {id:'produit',    key:'produit',   label:'Produit'},
   {id:'personas',   key:'personas',  label:'Personas'},
   {id:'themes',     key:'themes',    label:'Thèmes'},
-  {id:'personne',   key:'personnes', label:'Personne',  skipIn:'perso', field:'responsables'},
-  {id:'produit',    key:'produit',   label:'Produit'},
-  {id:'sources',    key:'sources',   label:'Sources'},
   {id:'etiquettes', key:'etiquettes',label:'Étiquettes'},
+  {id:'sources',    key:'sources',   label:'Sources'},
+  {id:'personne',   key:'personnes', label:'Personne',  skipIn:'perso', field:'responsables'},
 ];
 
 const COLS = [
@@ -238,13 +247,16 @@ const COLS = [
   {name:'creeLe',       title:'Créé le (Date et heure)',              type:'Date,DateTime', optional:true},
   {name:'modifPar',     title:'Modifié par (colonne Texte)',          type:'Text', optional:true},
   {name:'modifLe',      title:'Modifié le (Date et heure)',           type:'Date,DateTime', optional:true},
+  {name:'supprimee',    title:'Supprimée (colonne Bascule : active la corbeille)', type:'Bool', optional:true},
 ];
 
 /* ============ ÉTAT ============ */
 const $ = id => document.getElementById(id);
 let mode = 'suivi';            // suivi | backlog | perso
 let moi = lsGet('moi','');   // personne qui utilise CE navigateur (mémorisée dans le navigateur, pas partagée)
-let grp = 'statut';           // regroupement des colonnes en vue Suivi : statut | prio
+let grpBy = {suivi:'statut', perso:'statut', backlog:'prio'};   // regroupement des colonnes, par vue
+let askedMe = false, askResolve = null;   // question « Qui êtes-vous ? »
+let delConfirm = null;        // carte dont la suppression attend confirmation
 let sortPref = lsGet('sort', []);   // critères de tri (propres à ce navigateur)
 let map = null;                // association des colonnes
 let host = null;               // identifiant de la table où le widget est installé
@@ -283,6 +295,8 @@ function refIds(v){   // identifiants de lignes d'une colonne Référence / List
   return arr.map(x=> (x && typeof x==='object') ? (x.rowId ?? x.id) : x).filter(x=>typeof x==='number' && x>0);
 }
 function g(r,k){ return map && map[k] ? r[k] : undefined; }
+const isDel = r => !!(map && map.supprimee && r && r.supprimee);                        // tâche à la corbeille
+const prioEff = r => g(r,'prio') || (mode==='backlog' ? PRIO_NOUVEAU : '');           // Backlog : une prio vide compte comme « Nouveau"
 // valeurs d'une fiche pour un champ, sous forme de liste de textes
 function L(r,k){
   const v = g(r,k);
@@ -410,7 +424,7 @@ async function reloadMeta(){ metaSig=''; await ensureMeta(true); }
 // valeurs proposées : choix déclarés dans la colonne Grist (sinon valeurs par défaut) + valeurs déjà utilisées
 function choicesFor(k, fallback=[]){
   const base = (meta[k] && meta[k].choices && meta[k].choices.length) ? meta[k].choices : fallback;
-  const used = [...new Set(records.flatMap(r=>L(r,k)))];
+  const used = [...new Set(records.filter(r=>!isDel(r)).flatMap(r=>L(r,k)))];
   return [...new Set([...base.map(String), ...used])];
 }
 function isListCol(key){
@@ -475,6 +489,7 @@ const historyOf = id => side.history.rows.filter(h=>h.task===id);
 function commentCount(r){ return side.comments.ok ? commentsOf(r.id).length : (Number(g(r,'commentaires'))||0); }
 async function addComment(taskId, parentId, text){
   text = String(text||'').trim(); if (!text) return false;
+  await maybeAsk('Pour signer votre commentaire.');
   const c = side.comments.cols; if (!c){ alert('Table « '+TABLES.comments.table+' » inutilisable : '+side.comments.note); return false; }
   const f = {[c.task]: taskId, [c.text]: text};
   if (parentId && c.parent) f[c.parent] = parentId;
@@ -516,7 +531,7 @@ async function update(card, changes, encoded, extraLog){
   let res;
   if (hist.length){
     res = await actRes(main.concat(hist), true);          // modification + journal dans une seule opération
-    if (res){ histNote = ''; (res.retValues||[]).slice(1).forEach(id=>{ if (typeof id==='number') side.history.fill.add(id); }); loadTable('history'); }
+    if (res){ histNote = ''; afterHistoryWrite((res.retValues||[]).slice(1)); }
     else { res = await actRes(main); if (res) histNote = "Le journal n'a pas pu être enregistré : vérifiez la table « Historique » (droits, colonnes)."; }
   } else res = await actRes(main);
   if (!res){ pending.delete(card.id); ingest(); return false; }
@@ -548,6 +563,7 @@ function setField(card, key, v){   // choisit (ou décoche) une valeur
     return update(card, {responsables: list ? ids : (ids[0]||0)}, {responsables: list ? ['L',...ids] : (ids[0]||0)});
   }
   const cur = L(card,key), has = cur.includes(v);
+  if (key==='statut' && has) return;
   if (isMulti(key)){ const next = has ? cur.filter(x=>x!==v) : [...cur, v]; return update(card, {[key]: next}, {[key]: ['L',...next]}); }
   return update(card, {[key]: has ? null : v});
 }
@@ -561,15 +577,83 @@ function removeValue(card, key, v){ if (key==='responsables') return setField(ca
 /* --- votes : un vote par personne si la colonne Votants est associée --- */
 const voteCount = r => map.votants ? refIds(r.votants).length : (Number(g(r,'votes'))||0);
 const hasVoted = r => { const m = meObj(); return !!(map.votants && m && refIds(r.votants).includes(m.id)); };
-function castVote(card){
+async function castVote(card){
   if (!card) return;
   if (map.votants){
-    const m = meObj();
-    if (!m){ alert("Choisissez qui vous êtes dans la liste « Moi » (en haut de la vue) pour voter : un vote par personne."); return; }
-    const cur = refIds(card.votants), ids = cur.includes(m.id) ? cur.filter(x=>x!==m.id) : [...cur, m.id];
-    return update(card, {votants: ids}, {votants: ['L', ...ids]});
+    const m = meObj() || await askMe("Pour voter : un vote par personne.");
+    if (!m) return;
+    const c = index.get(card.id) || card;
+    const cur = refIds(c.votants), ids = cur.includes(m.id) ? cur.filter(x=>x!==m.id) : [...cur, m.id];
+    return update(c, {votants: ids}, {votants: ['L', ...ids]});
   }
   return update(card, {votes: (Number(g(card,'votes'))||0)+1});
+}
+
+/* --- règles du Backlog --- */
+const canEnterSuivi = r => !g(r,'statut') && (PRIO_GROOMEE.test(g(r,'prio')||'') || g(r,'prio')===PRIO_RELEGUE);   // seulement depuis P0–P3 ou Relégué
+function backlogPrioFor(r){   // colonne du Backlog où part une carte renvoyée du Suivi
+  const p = g(r,'prio') || '';
+  if (PRIO_GROOMEE.test(p)) return PRIO_RELEGUE;   // déjà travaillée → Relégué
+  if (!p) return PRIO_NOUVEAU;                      // jamais priorisée → Nouveau
+  return p;                                         // Nouveau, Relégué, Abandonné, Déjà prévu : inchangé
+}
+async function sendBack(card){
+  if (!card || !map.prio || !g(card,'statut')) return false;
+  const target = backlogPrioFor(card);
+  if (target===PRIO_RELEGUE && meta.prio && !meta.prio.choices.includes(PRIO_RELEGUE)) await addChoice('prio', PRIO_RELEGUE);   // crée le choix « Relégué » au besoin
+  const c = index.get(card.id) || card;
+  return update(c, {statut:null, prio:target});
+}
+async function trashTask(card){   // suppression douce : la ligne reste dans la table
+  if (!card || !map.supprimee) return false;
+  openId = null; ficheSig = ''; delConfirm = null; closeMenu();
+  return update(card, {supprimee:true}, undefined, [{event:'Suppression', before:'', after:card.titre||''}]);
+}
+async function restoreTask(card){
+  if (!card || !map.supprimee) return false;
+  openId = null; ficheSig = ''; delConfirm = null; closeMenu();
+  return update(card, {supprimee:false}, undefined, [{event:'Restauration', before:'', after:card.titre||''}]);
+}
+async function deleteTask(card){
+  if (!card) return false;
+  const id = card.id, title = card.titre || '';
+  const cs = side.comments.ok ? side.comments.rows.filter(c=>c.task===id).map(c=>c.id) : [];
+  const hist = histActions([{taskId:id, event:'Suppression définitive', before:title, after:''}]);
+  const rm = [...(cs.length ? [['BulkRemoveRecord', TABLES.comments.table, cs]] : []), ['RemoveRecord', host, id]];
+  let res = hist.length ? await actRes(hist.concat(rm), true) : null;
+  if (res){ histNote = ''; afterHistoryWrite([(res.retValues||[])[0]]); }
+  else { res = await actRes(rm); if (res && hist.length) histNote = "Le journal n'a pas pu être enregistré : vérifiez la table « Historique » (droits, colonnes)."; }
+  if (!res) return false;
+  pending.delete(id); rawRecs = rawRecs.filter(r=>r.id!==id); delConfirm = null; openId = null; ficheSig = ''; closeMenu();
+  ingest();
+  loadTable('comments');
+  return true;
+}
+/* --- identité (déclarée) : demandée seulement quand elle sert --- */
+let askPromise = null;
+function askMe(reason){
+  if (meObj() || !team.length) return Promise.resolve(meObj());
+  if (askPromise) return askPromise;                    // une seule question à la fois : tous les appelants attendent la même réponse
+  askPromise = new Promise(res=>{
+    askResolve = ()=>{ askPromise = null; res(meObj()); };
+    const p = $('pop'); p.style.display = 'block';
+    p.innerHTML = `<b>Qui êtes-vous ?</b><div class="hint">${esc(reason)} Votre choix est mémorisé dans ce navigateur (pas partagé).</div>
+      <div class="row"><select id="qm"><option value="">— choisir —</option>${team.map(t=>`<option>${esc(t.label)}</option>`).join('')}</select></div>
+      <div class="row" style="justify-content:flex-end"><button id="qm-skip">Plus tard</button><button class="primary" id="qm-ok">Valider</button></div>`;
+    const done = v=>{ if (v){ moi = v; lsSet('moi', moi); } closePop(); render(); };
+    $('qm-ok').onclick = ()=>done($('qm').value); $('qm-skip').onclick = ()=>done('');
+  });
+  return askPromise;
+}
+async function maybeAsk(reason){ if (!meObj() && !askedMe && team.length) await askMe(reason); }
+async function afterHistoryWrite(ids){   // complète la date tout de suite, puis la signature une fois l'identité connue
+  ids = ids.filter(i=>typeof i==='number'); if (!ids.length) return;
+  const had = !!meObj();
+  ids.forEach(i=>side.history.fill.add(i)); await loadTable('history');
+  if (!had){
+    await maybeAsk("Pour signer l'historique des modifications.");
+    if (meObj()){ ids.forEach(i=>side.history.fill.add(i)); await loadTable('history'); }
+  }
 }
 
 /* --- création de nouvelles valeurs --- */
@@ -631,9 +715,10 @@ function fieldMenu(cardId, key, fromPicker){
       const d = toDate(g(c,'echeance')), editable = meta.echeance && meta.echeance.type==='Date';
       html += editable ? `<div class="row"><input type="date" id="mn-date" value="${d?d.toISOString().slice(0,10):''}"></div>${d?'<span class="lnk" data-clr>Effacer la date</span>':''}`
                        : `<div class="mh" style="text-transform:none">Modifiable seulement pour une colonne de type « Date » (pas « Date et heure »).</div>`;
+    } else if (key==='statut' && !g(c,'statut') && !canEnterSuivi(c)){
+      html += `<div class="mh" style="text-transform:none;max-width:250px">Une carte ne passe en Suivi que depuis une prio P0 à P3 ou « Relégué ». Définissez d'abord sa prio.</div>`;
     } else {
       const multi = isMulti(key), sel = selectedOf(c,key).map(String);
-      if (key==='statut') html += `<label class="mi ${!sel.length?'pick':''}"><input type="radio" data-opt="" ${!sel.length?'checked':''}> Aucun (Backlog)</label>`;
       html += optionsFor(key).map(o=>{ const on = sel.includes(String(o.v));
         return `<label class="mi ${on?'pick':''}"><input type="${multi?'checkbox':'radio'}" data-opt="${esc(o.v)}" ${on?'checked':''}> ${f.kind==='single'||f.kind==='tags'?tag(o.label, key==='prio'?'prio':''):esc(o.label)}</label>`; }).join('');
       if (!optionsFor(key).length) html += '<div class="mh" style="text-transform:none">Aucune valeur : ajoutez-en ci-dessous.</div>';
@@ -645,7 +730,6 @@ function fieldMenu(cardId, key, fromPicker){
       el.querySelectorAll('[data-opt]').forEach(i=>i.onchange = ()=>{
         const cur = index.get(cardId); if (!cur) return;
         const raw = i.dataset.opt;
-        if (key==='statut' && raw===''){ update(cur,{statut:null}); return; }
         const v = key==='responsables' ? +raw : raw;
         if (!isMulti(key) && L(cur,key).includes(String(v))){ setField(cur,key,v); return; }
         setField(cur, key, v);
@@ -762,19 +846,23 @@ async function mgDelete(key, v){
 
 /* ============ COLONNES DU KANBAN (selon la vue) ============ */
 // Vue Backlog : colonnes = Prio. Vues Suivi et Mes tâches : colonnes = Statut.
-const groupKey = () => mode==='backlog' ? 'prio' : (grp==='prio' ? 'prio' : 'statut');
-const orderKey = () => mode==='backlog' ? 'backlog' : (groupKey()==='prio' ? mode+':prio' : mode);   // ordre des colonnes mémorisé par vue et par regroupement
-const groupOf = r => String(g(r, groupKey()) || '');
+const groupChoices = () => (mode==='corbeille' ? [] : mode==='backlog' ? ['prio','charge'] : ['statut','prio','charge']).filter(k=>map && map[k]);
+const defaultGroup = () => mode==='backlog' ? 'prio' : 'statut';
+const groupKey = () => { const k = grpBy[mode] || defaultGroup(); return (k===defaultGroup() || groupChoices().includes(k)) ? k : defaultGroup(); };
+const orderKey = () => groupKey()===defaultGroup() ? mode : mode+':'+groupKey();   // ordre des colonnes mémorisé par vue et par regroupement
+const groupOf = r => mode==='corbeille' ? '' : groupKey()==='prio' ? String(prioEff(r)) : String(g(r, groupKey()) || '');
 function groupList(){
+  if (mode==='corbeille') return [{name:'', label:'Corbeille', color:'#8a8f98'}];
   const k = groupKey(), fld = FIELDS.find(f=>f.key===k);
-  const defaults = k==='prio' ? PRIO_COLORS : STATUT_COLORS;
+  const defaults = k==='prio' ? PRIO_COLORS : k==='charge' ? CHARGE_COLORS : STATUT_COLORS;
   const hasDecl = !!(meta[k] && meta[k].choices && meta[k].choices.length);
   const declared = hasDecl ? meta[k].choices : fld.fallback;
   const all = choicesFor(k, fld.fallback).sort((a,b)=>{ const ia=declared.indexOf(a), ib=declared.indexOf(b); return (ia<0?999:ia)-(ib<0?999:ib); });
+  if (k==='prio' && mode==='backlog' && !all.includes(PRIO_NOUVEAU)) all.push(PRIO_NOUVEAU);   // les tâches sans prio y sont affichées
   const ord = colOrder[orderKey()] || [];
   const rank = n => { const i = ord.indexOf(n); return i>=0 ? i : 1000 + all.indexOf(n); };
   const list = all.map((n,i)=>({name:n, color:colors.groups[n]||defaults[i]||'#999', warn: hasDecl && !declared.includes(n)})).sort((a,b)=>rank(a.name)-rank(b.name));
-  if (records.some(r=>inView(r) && !groupOf(r))) list.push({name:'', label: k==='prio'?'Sans priorité':'Sans statut', color:'#bbb'});
+  if (records.some(r=>inView(r) && !groupOf(r))) list.push({name:'', label: k==='prio'?'Sans priorité':k==='charge'?'Sans charge':'Sans statut', color:'#bbb'});
   return list;
 }
 function moveColumn(from, to){
@@ -792,7 +880,7 @@ function sortCards(list){
   const crit = sortPref.filter(s=>s && s.k && map[s.k]);
   const rankOf = (r,k)=>{
     if (k==='echeance'){ const d = toDate(g(r,'echeance')); return d ? +d : null; }
-    const v = g(r,k); if (!v) return null;
+    const v = k==='prio' ? prioEff(r) : g(r,k); if (!v) return null;
     const dec = (meta[k] && meta[k].choices && meta[k].choices.length) ? meta[k].choices : FIELDS.find(f=>f.key===k).fallback;
     const i = dec.indexOf(String(v)); return i<0 ? 999 : i;
   };
@@ -824,6 +912,8 @@ function sortMenu(){
 /* ============ FILTRAGE ============ */
 // Règle Backlog / Suivi : un Statut renseigné = Suivi ; pas de Statut = Backlog
 function inView(r){
+  if (mode==='corbeille') return isDel(r);
+  if (isDel(r)) return false;
   const hasStatut = !!g(r,'statut');
   return mode==='backlog' ? !hasStatut : hasStatut;
 }
@@ -833,10 +923,10 @@ function passes(r){
   for (const f of FILTERS){
     if (f.skipIn===mode) continue;
     const sel = F[f.id]; if (!sel.length) continue;
-    const vals = L(r, f.key);
+    const vals = f.key==='prio' ? (prioEff(r) ? [String(prioEff(r))] : []) : L(r, f.key);
     if (!sel.some(x=>vals.includes(x))) return false;
   }
-  if (mode!=='backlog' && (F.from||F.to)){
+  if (F.from||F.to){
     const d = toDate(g(r,'echeance')); if (!d) return false;
     if (F.from && dayStart(d) < dayStart(F.from)) return false;
     if (F.to && dayStart(d) > dayStart(F.to)) return false;
@@ -851,30 +941,35 @@ function passes(r){
 /* ============ RENDU : barre du haut, bandeaux ============ */
 function renderHeader(){
   const has = k => map && map[k];
-  let h = `<label>Vue <select id="mode">
+  let r1 = `<label>Vue <select id="mode">
       <option value="suivi" ${mode==='suivi'?'selected':''}>Suivi de projet</option>
       <option value="backlog" ${mode==='backlog'?'selected':''}>Backlog</option>
-      <option value="perso" ${mode==='perso'?'selected':''}>Mes tâches</option></select></label>`;
+      <option value="perso" ${mode==='perso'?'selected':''}>Mes tâches</option>${map&&map.supprimee?`<option value="corbeille" ${mode==='corbeille'?'selected':''}>🗑 Corbeille (${records.filter(isDel).length})</option>`:''}</select></label>`;
+  let r2 = '';
   if (map){
-    if (mode!=='backlog' && map.prio && map.statut) h += `<label>Grouper par <select id="f-grp"><option value="statut" ${grp!=='prio'?'selected':''}>Statut</option><option value="prio" ${grp==='prio'?'selected':''}>Prio</option></select></label>`;
-    { const names = team.length ? team.map(t=>t.label) : [...new Set(records.flatMap(r=>L(r,'personnes')))].sort((a,b)=>a.localeCompare(b,'fr'));
-      h += `<label title="Qui utilise ce navigateur : sert à « Mes tâches », aux votes et à la signature des commentaires (mémorisé sur cet ordinateur)">Moi <select id="f-moi"><option value="">— choisir —</option>${names.map(n=>`<option ${n===moi?'selected':''}>${esc(n)}</option>`).join('')}</select></label>`; }
+    const gks = groupChoices();
+    if (gks.length>1) r1 += `<label>Grouper par <select id="f-grp">${gks.map(k=>`<option value="${k}" ${groupKey()===k?'selected':''}>${GROUP_LABELS[k]}</option>`).join('')}</select></label>`;
+    if (mode==='perso'){
+      const names = team.length ? team.map(t=>t.label) : [...new Set(records.flatMap(r=>L(r,'personnes')))].sort((a,b)=>a.localeCompare(b,'fr'));
+      r1 += `<label title="Votre nom : sert à filtrer vos tâches (mémorisé sur cet ordinateur)">Moi <select id="f-moi"><option value="">— tout le monde —</option>${names.map(n=>`<option ${n===moi?'selected':''}>${esc(n)}</option>`).join('')}</select></label>`;
+    }
     FILTERS.forEach(f=>{
       if (f.skipIn===mode) return;
       if (f.key==='personnes' ? !(map.responsables||map.personnes) : !has(f.key)) return;
       const n = F[f.id].length;
-      h += `<button class="fb ${n?'active':''}" data-anchor="f-${f.id}" data-fbtn="${f.id}">${f.label}${n?` (${n})`:''} ▾</button>`;
+      r1 += `<button class="fb ${n?'active':''}" data-anchor="f-${f.id}" data-fbtn="${f.id}">${f.label}${n?` (${n})`:''} ▾</button>`;
     });
-    if (mode!=='backlog' && has('echeance')) h += `<label>Du <input type="date" id="f-from" value="${F.from}"></label><label>au <input type="date" id="f-to" value="${F.to}"></label>`;
+    if (has('echeance')) r2 += `<label>Échéance du <input type="date" id="f-from" value="${F.from}"></label><label>au <input type="date" id="f-to" value="${F.to}"></label>`;
+    const ns = sortPref.filter(s=>s && s.k).length;
+    r2 += `<button class="fb ${ns?'active':''}" data-anchor="sort" id="sortBtn" title="Trier les cartes de chaque colonne">Tri${ns?` (${ns})`:''} ▾</button>`;
   }
-  if (map){ const ns = sortPref.filter(s=>s && s.k).length; h += `<button class="fb ${ns?'active':''}" data-anchor="sort" id="sortBtn" title="Trier les cartes de chaque colonne">Tri${ns?` (${ns})`:''} ▾</button>`; }
-  h += `<input type="search" id="f-q" placeholder="Mot clé…" value="${esc(F.q)}">`;
-  h += `<button id="reset">Réinitialiser</button><span class="spacer"></span><button id="mgBtn" title="Ajouter, renommer, supprimer des valeurs">✎ Valeurs</button><button id="diagBtn">🔧</button><button id="colorsBtn">🎨 Couleurs</button>`;
-  $('hdr').innerHTML = h;
+  r2 += `<input type="search" id="f-q" placeholder="Mot clé…" value="${esc(F.q)}">`;
+  r2 += `<button id="reset">Réinitialiser</button><span class="spacer"></span><button id="mgBtn" title="Ajouter, renommer, supprimer des valeurs">✎ Valeurs</button><button id="diagBtn" title="Diagnostic">🔧 Diagnostic</button><button id="colorsBtn">🎨 Couleurs</button>`;
+  $('hdr').innerHTML = `<div class="hrow">${r1}</div><div class="hrow">${r2}</div>`;
 
   $('mode').onchange = e=>{ mode=e.target.value; grist.setOption('mode',mode); closeMenu(); render(); };
   const mo = $('f-moi'); if (mo) mo.onchange = ()=>{ moi = mo.value; lsSet('moi',moi); render(); };
-  const gp = $('f-grp'); if (gp) gp.onchange = ()=>{ grp = gp.value; grist.setOption('group',grp); render(); };
+  const gp = $('f-grp'); if (gp) gp.onchange = ()=>{ grpBy[mode] = gp.value; grist.setOption('groups', grpBy); render(); };
   const sb = $('sortBtn'); if (sb) sb.onclick = ()=>openMenu('sort', sortMenu());
   document.querySelectorAll('[data-fbtn]').forEach(b=>b.onclick=()=>{ const f = FILTERS.find(x=>x.id===b.dataset.fbtn); openMenu('f-'+f.id, filterMenu(f)); });
   const ff = $('f-from'); if (ff) ff.onchange = ()=>{ F.from=ff.value; render(); };
@@ -889,7 +984,8 @@ function renderWarn(){
   const parts = [];
   if (map){
     const total = records.length, shown = records.filter(passes).length, inv = records.filter(inView).length;
-    if (!total || !shown){
+    if (mode==='corbeille') parts.push(`<div class="info">Corbeille : ces tâches restent dans la table (colonne « Supprimée » cochée). Restaurez une tâche pour la remettre dans le Kanban.</div>`);
+    if ((!total || !shown) && !(mode==='corbeille' && total)){
       let t = `${total} ligne(s) reçue(s) de « ${esc(host||'?')} » · ${shown} affichée(s) dans cette vue`;
       if (inv<total) t += ` · ${total-inv} dans l'autre vue (${mode==='backlog'?'Suivi':'Backlog'}) à cause du Statut`;
       if (inv>shown) t += ` · ${inv-shown} masquée(s) par les filtres`;
@@ -953,17 +1049,17 @@ function cardHtml(r){
   if (mode!=='backlog' && g(r,'prio')) tags += tagX(g(r,'prio'),'prio');
   if (g(r,'charge')) tags += tagX(g(r,'charge'),'charge');
   ['etiquettes','personas','produit','themes','sources'].forEach(k=>L(r,k).forEach(t=>tags+=tagX(t,k)));
-  tags += `<button class="cplus" data-cplus="1" data-anchor="cp-${r.id}" title="Modifier le statut, la prio ou la charge">＋</button>`;
+  if (mode!=='corbeille') tags += `<button class="cplus" data-cplus="1" data-anchor="cp-${r.id}" title="Modifier le statut, la prio ou la charge">＋</button>`;
   let m = dateBadge(r);
   const cl = checklistCount(g(r,'checklist'));
   if (cl.total) m += `<span>☑ ${cl.done}/${cl.total}</span>`;
   const pj = refIds(g(r,'pj')).length; if (pj) m += `<span>📎${pj}</span>`;
   const cc = commentCount(r); if (cc) m += `<span>🗨️${cc}</span>`;
   if (mode==='backlog' && (map.votes||map.votants)) m += `<button class="vote ${hasVoted(r)?'on':''}" data-vote="1" title="${map.votants?(hasVoted(r)?'Retirer mon vote':'Voter (un vote par personne)'):'Voter'}">👍 ${voteCount(r)}</button>`;
-  if (mode==='backlog') m += `<button class="tosuivi" data-tosuivi="1" title="Passer dans le suivi (statut A faire)">➜ Suivi</button>`;
-  if (mode!=='backlog' && g(r,'statut')==='A faire') m += `<button class="tobacklog" data-tobacklog="1" title="Remettre dans le backlog (statut vidé)">⬅ Backlog</button>`;
+  if (mode==='backlog' && canEnterSuivi(r)) m += `<button class="tosuivi" data-tosuivi="1" title="Envoyer dans le Suivi, colonne « ${STATUT_DEFAUT} »">➜ Suivi</button>`;
+  if (mode==='corbeille') m += `<button class="tosuivi" data-restore="1" title="Remettre la tâche dans le Kanban">↩ Restaurer</button>`;
   const av = L(r,'personnes').map(n=>`<div class="av" title="${esc(n)}">${esc(initials(n))}</div>`).join('');
-  return `<div class="card${r.id===openId?' open':''}" draggable="true" data-id="${r.id}">
+  return `<div class="card${r.id===openId?' open':''}" draggable="${mode==='corbeille'?'false':'true'}" data-id="${r.id}">
     <div class="tags">${tags}</div>
     <div class="title">${esc(r.titre)||'<i>(sans titre)</i>'}</div>
     <div class="meta">${m}<div class="avatars">${av}</div></div></div>`;
@@ -987,7 +1083,7 @@ function render(){
   try { rebuild(); renderHeader(); renderWarn(); renderBoard(); renderPanel(); renderFiche(); renderManage(); renderMenu(); renderDiag(); $('err').innerHTML=''; }
   catch(e){ showError(e); }
 }
-function rebuild(){ index = new Map(records.map(r=>[r.id,r])); }
+function rebuild(){ if (map && mode==='corbeille' && !map.supprimee) mode = 'suivi'; index = new Map(records.map(r=>[r.id,r])); }
 
 /* ---- Panneau de personnalisation des couleurs ---- */
 function saveColors(){ grist.setOption('colors', colors); }
@@ -1018,7 +1114,7 @@ function renderPanel(){
 }
 
 /* ============ NOUVELLE CARTE ============ */
-function closePop(){ $('pop').style.display='none'; }
+function closePop(){ $('pop').style.display='none'; if (askResolve){ const f = askResolve; askResolve = null; askedMe = true; f(); } }
 function openNewPop(group){
   const p = $('pop'); p.style.display='block';
   p.innerHTML = `<b>Nouvelle carte</b> <span class="hint">(${esc(group)})</span>
@@ -1027,14 +1123,16 @@ function openNewPop(group){
   const ok = async ()=>{
     const t = $('nt').value.trim();
     if (!t) return; closePop();
-    const f = {[map.titre]: t, [map[groupKey()]]: group};                 // Suivi : colonne = Statut ; Backlog : colonne = Prio
-    if (mode!=='backlog' && groupKey()==='prio' && map.statut) f[map.statut] = STATUT_DEFAUT;   // sinon la carte partirait au Backlog
+    const gk = groupKey();
+    const f = {[map.titre]: t, [map[gk]]: group};                       // la colonne cliquée donne la valeur (Statut, Prio ou Charge)
+    if (mode!=='backlog' && gk!=='statut' && map.statut) f[map.statut] = STATUT_DEFAUT;   // sinon la carte partirait au Backlog
+    if (mode==='backlog' && gk!=='prio' && map.prio) f[map.prio] = PRIO_NOUVEAU;
     const res = await actRes([['AddRecord', host, null, f]]);
     const id = res && res.retValues && res.retValues[0];
     if (typeof id==='number'){
       const h = histActions([{taskId:id, event:'Création', before:'', after:t}]);
       const r2 = h.length ? await actRes(h, true) : null;
-      if (r2 && r2.retValues && typeof r2.retValues[0]==='number'){ side.history.fill.add(r2.retValues[0]); loadTable('history'); }
+      if (r2 && r2.retValues) afterHistoryWrite([r2.retValues[0]]);
     }
   };
   $('nok').onclick = ok; $('ncancel').onclick = closePop;
@@ -1055,12 +1153,12 @@ async function downloadAttachment(id){
 }
 
 /* ============ FICHE DE LA CARTE (version compacte) ============ */
-function openFiche(id){ openId = id; panelOpen = false; ficheSig = ''; if (map && map.pj) loadAttachMeta(); render(); }
-function closeFiche(){ if (openId===null) return; openId = null; ficheSig = ''; $('fiche').style.display='none'; closeMenu(); renderBoard(); }
+function openFiche(id){ openId = id; delConfirm = null; panelOpen = false; ficheSig = ''; if (map && map.pj) loadAttachMeta(); render(); }
+function closeFiche(){ if (openId===null) return; openId = null; delConfirm = null; ficheSig = ''; $('fiche').style.display='none'; closeMenu(); renderBoard(); }
 function refreshFiche(){ ficheSig=''; renderFiche(); renderMenu(); }
 function sigOf(r){
-  return JSON.stringify([metaTick, side.comments.tick, side.history.tick, moi, r.titre, g(r,'statut'), g(r,'prio'), g(r,'charge'), g(r,'description'), g(r,'checklist'), g(r,'echeance'), g(r,'responsables'), g(r,'personnes'), g(r,'pj'), g(r,'votes'), g(r,'votants'),
-    g(r,'creePar'), g(r,'creeLe'), g(r,'modifPar'), g(r,'modifLe'), ...FIELDS.filter(f=>f.kind==='tags').map(f=>L(r,f.key))]);
+  return JSON.stringify([metaTick, delConfirm===r.id, side.comments.tick, side.history.tick, moi, r.titre, g(r,'statut'), g(r,'prio'), g(r,'charge'), g(r,'description'), g(r,'checklist'), g(r,'echeance'), g(r,'responsables'), g(r,'personnes'), g(r,'pj'), g(r,'votes'), g(r,'votants'),
+    g(r,'creePar'), g(r,'creeLe'), g(r,'modifPar'), g(r,'modifLe'), isDel(r), ...FIELDS.filter(f=>f.kind==='tags').map(f=>L(r,f.key))]);
 }
 function summaryHtml(r){
   const sg = (lbl, inner) => `<div class="sg"><div class="lbl">${lbl}</div><div class="vals">${inner}</div></div>`;
@@ -1087,7 +1185,8 @@ function historyHtml(r){
   const list = historyOf(r.id).sort((a,b)=>(a.date&&b.date) ? (b.date-a.date) : (b.id-a.id));
   if (!list.length) return '<div class="none">Aucun changement enregistré.</div>';
   return list.slice(0,40).map(h=>{
-    const ev = h.event==='Création' ? 'Création de la tâche' : `${esc(h.event)} : <span class="hv">${esc(h.before||'∅')}</span> → <span class="hv">${esc(h.after||'∅')}</span>`;
+    const plain = {'Création':'Création de la tâche', 'Suppression':'Mise à la corbeille', 'Restauration':'Restauration depuis la corbeille', 'Suppression définitive':'Suppression définitive'};
+    const ev = plain[h.event] ? plain[h.event] : `${esc(h.event)} : <span class="hv">${esc(h.before||'∅')}</span> → <span class="hv">${esc(h.after||'∅')}</span>`;
     return `<div class="hl"><span class="hd">${h.date?esc(fmtDateTime(h.date)):''}</span> · <b>${esc(who(h.author||h.email)||'—')}</b> · ${ev}</div>`;
   }).join('') + (list.length>40 ? `<div class="none">… et ${list.length-40} entrée(s) plus anciennes</div>` : '') +
     '<div class="none" style="margin-top:6px">Seuls les changements faits depuis ce widget sont enregistrés.</div>';
@@ -1139,6 +1238,12 @@ function renderFiche(){
   if (cp || cl) fm.push('Créée'+(cl?' le '+esc(fmtDateTime(cl)):'')+(cp?' par '+esc(who(cp)):''));
   if (mp || ml) fm.push('Modifiée'+(ml?' le '+esc(fmtDateTime(ml)):'')+(mp?' par '+esc(who(mp)):''));
   const fmeta = fm.length ? `<div class="fmeta">${fm.join(' · ')}</div>` : '';
+  const soft = !!map.supprimee, inTrash = isDel(r);
+  const acts = inTrash ? `<div class="acts"><button class="btn" id="fp-restore" title="Remettre la tâche dans le Kanban">↩ Restaurer</button><span class="none">🗑 Cette tâche est à la corbeille.</span></div>` : (g(r,'statut') && map.prio) ? `<div class="acts"><button class="btn ghost" id="fp-back" title="La carte quitte le Suivi et va dans la colonne « ${esc(backlogPrioFor(r))} » du Backlog">⬅ Renvoyer au backlog</button><span class="none">→ colonne « ${esc(backlogPrioFor(r))} »</span></div>` : '';
+  const delHtml = delConfirm===r.id
+    ? `<div class="sec"><div class="mmsg">${soft ? 'Supprimer définitivement cette tâche ? Elle disparaît de la table, avec ses commentaires. Cette action ne peut pas être annulée. Le journal en garde une trace.' : 'Supprimer cette tâche ? Elle disparaît du Kanban et de la table, avec ses commentaires. Le journal en garde une trace.'}</div><div class="row"><button class="btn danger" id="fp-delok">Oui, supprimer${soft?' définitivement':''}</button><button class="btn ghost" id="fp-delno">Annuler</button></div></div>`
+    : (soft && !inTrash) ? `<div class="sec"><button class="btn ghost" id="fp-trash" title="La tâche reste dans la table et peut être restaurée">🗑 Mettre à la corbeille</button></div>`
+    : `<div class="sec"><button class="btn ghost" id="fp-del">🗑 ${soft?'Supprimer définitivement…':'Supprimer la tâche'}</button></div>`;
 
   const desc = map.description ? `<div class="sec"><div class="sh">📝 Description</div><textarea class="desc" id="fp-desc" placeholder="Ajouter une description plus détaillée…">${esc(g(r,'description')||'')}</textarea></div>` : '';
 
@@ -1166,11 +1271,13 @@ function renderFiche(){
     ${fmeta}<div class="fbody">
       <div class="tb">${dd}${vote}</div>
       <div class="summ">${summaryHtml(r)}</div>
+      ${acts}
       ${desc}
       <div class="sec"><div class="sh">☑ Checklist${clCount.total?`<span class="sub">${clCount.done}/${clCount.total}</span>`:''}</div>${checklist}</div>
       ${pj}
       <div class="sec"><div class="sh">🗨️ Commentaires<span class="sub">${side.comments.ok?commentsOf(id).length:''}</span></div>${commentsHtml(r)}</div>
       <div class="sec"><div class="sh">🕘 Historique<span class="sub">${side.history.ok?historyOf(id).length:''}</span></div>${historyHtml(r)}</div>
+      ${delHtml}
     </div>`;
   f.scrollTop = keepScroll;
   if (keep){ const el = f.querySelector(keep.sel); if (el){ el.value = keep.v; el.focus(); try { el.setSelectionRange(keep.s, keep.e); } catch(e){} } }
@@ -1181,6 +1288,12 @@ function renderFiche(){
   $('f-title').onchange = saveTitle; $('f-title').onblur = saveTitle;
   f.querySelectorAll('[data-dd]').forEach(b=>b.onclick=()=>openMenu('fd-'+b.dataset.dd, fieldMenu(id, b.dataset.dd)));
   const vt = $('fp-vote'); if (vt) vt.onclick = ()=>castVote(cur());
+  const bk = $('fp-back'); if (bk) bk.onclick = ()=>sendBack(cur());
+  const tr = $('fp-trash'); if (tr) tr.onclick = ()=>trashTask(cur());
+  const rs = $('fp-restore'); if (rs) rs.onclick = ()=>restoreTask(cur());
+  const dl = $('fp-del'); if (dl) dl.onclick = ()=>{ delConfirm = id; refreshFiche(); };
+  const dn = $('fp-delno'); if (dn) dn.onclick = ()=>{ delConfirm = null; refreshFiche(); };
+  const dk = $('fp-delok'); if (dk) dk.onclick = ()=>deleteTask(cur());
   f.querySelectorAll('[data-rm]').forEach(x=>x.onclick=()=>{ const c=cur(); if (c) removeValue(c, x.dataset.rm, x.dataset.val); });
   f.querySelectorAll('[data-rmresp]').forEach(x=>x.onclick=()=>{ const c=cur(); if (c) setField(c,'responsables',+x.dataset.rmresp); });
   const ds = $('fp-desc'); if (ds){ const saveDesc = ()=>{ const c=cur(); if (c && ds.value !== (g(c,'description')||'')) update(c,{description: ds.value}); }; ds.onchange = saveDesc; ds.onblur = saveDesc; }
@@ -1243,6 +1356,7 @@ function wire(){
     col.ondrop = e=>{
       e.preventDefault(); col.classList.remove('over','colover');
       if (isColDrag(e)){ moveColumn(e.dataTransfer.getData('application/x-col'), col.dataset.group); return; }
+      if (mode==='corbeille') return;
       const r = index.get(+(e.dataTransfer.getData('text/plain') || dragId)); if(!r) return;
       update(r, {[groupKey()]: col.dataset.group || null});
     };
@@ -1251,8 +1365,8 @@ function wire(){
   document.querySelectorAll('[data-cplus]').forEach(b=>b.onclick=e=>{ e.stopPropagation(); const c = cardOf(b); if (c) openMenu(b.dataset.anchor, fieldPicker(c.id)); });
   document.querySelectorAll('.card [data-rm]').forEach(x=>x.onclick=e=>{ e.stopPropagation(); const c=cardOf(x); if (c) removeValue(c, x.dataset.rm, x.dataset.val); });
   document.querySelectorAll('[data-vote]').forEach(b=>b.onclick=()=>castVote(cardOf(b)));
-  document.querySelectorAll('[data-tosuivi]').forEach(b=>b.onclick=()=>update(cardOf(b), {statut:'A faire'}));
-  document.querySelectorAll('[data-tobacklog]').forEach(b=>b.onclick=()=>update(cardOf(b), {statut:null}));
+  document.querySelectorAll('[data-restore]').forEach(b=>b.onclick=()=>restoreTask(cardOf(b)));
+  document.querySelectorAll('[data-tosuivi]').forEach(b=>b.onclick=()=>{ const c = cardOf(b); if (c && canEnterSuivi(c)) update(c, {statut:STATUT_DEFAUT}); });
 }
 document.addEventListener('click', e=>{
   if (!menu) return;
@@ -1270,7 +1384,8 @@ document.addEventListener('keydown', e=>{
 grist.ready({ columns: COLS, requiredAccess: 'full', allowSelectBy: true });
 grist.onOptions(o=>{
   if (o && o.mode) mode = o.mode;
-  if (o && o.group) grp = o.group;
+  if (o && o.groups) grpBy = {...grpBy, ...o.groups};
+  else if (o && (o.group==='prio' || o.group==='statut')) grpBy.suivi = grpBy.perso = o.group;   // ancien réglage
   if (o && o.colors) colors = {groups:o.colors.groups||{}, tags:o.colors.tags||{}};
   if (o && o.order) colOrder = o.order;
   if (o && o.orange != null) thr.orange = Number(o.orange);
