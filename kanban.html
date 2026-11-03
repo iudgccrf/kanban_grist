@@ -219,7 +219,7 @@
   #fiche { background:#eef0f4; }
   #fiche .fhead { background:var(--accent-bg); border-bottom:0; }
   #fiche .ftitle { color:#1f2a6b; }
-  #fiche input[type=text].ftitle { font-size:23px; font-weight:800; line-height:1.2; }
+  #fiche textarea.ftitle { display:block; font-size:18px; font-weight:800; line-height:1.25; resize:none; overflow:hidden; }
   .ftop { background:var(--accent-bg); padding:0 18px 14px; }
   #fiche .fmeta { padding:0 8px 2px; margin:-4px 0 0; color:#3f4770; }
   #fiche .fbody { padding:12px 12px 30px; }
@@ -272,7 +272,7 @@
 
 <script>
 /* ============ CONFIGURATION ============ */
-const VERSION = '2026-11-03 j';   // affichée dans le bandeau et le diagnostic : permet de vérifier que le bon fichier est chargé
+const VERSION = '2026-11-03 k';   // affichée dans le bandeau et le diagnostic : permet de vérifier que le bon fichier est chargé
 const STATUTS = ['A faire','En cours','Bloqué','A valider','Terminé','Abandonné','Archivé'];
 const PRIOS   = ['P0 Critique','P1 Important','P2 Souhaitable','P3 Appréciable','Nouveau','Relégué','Abandonné','Déjà prévu'];
 const CHARGES = ['XS','S','M','L','XL'];
@@ -1597,7 +1597,7 @@ function renderFiche(){
       ${uploadNote ? `<div class="none">${esc(uploadNote)}</div>` : `<label class="drop" id="fp-drop"><input type="file" id="fp-file" multiple style="position:absolute;opacity:0;width:1px;height:1px"><b>Choisir des fichiers</b> ou les déposer ici</label>`}</div>`;
   }
 
-  f.innerHTML = `<div class="fhead"><input type="text" class="ftitle" id="f-title" value="${esc(r.titre)}" placeholder="Titre de la tâche">${map.espace?`<button class="espill${isHP(r)?' hp':''}" data-anchor="fd-espace" data-dd="espace" title="Changer l'espace">${esc(g(r,'espace')||ESP_PROJET)} ▾</button>`:''}<button class="close" id="fclose" title="Fermer (Échap)">×</button></div>
+  f.innerHTML = `<div class="fhead"><textarea class="ftitle" id="f-title" rows="1" aria-label="Titre de la tâche" placeholder="Titre de la tâche">${esc(r.titre)}</textarea>${map.espace?`<button class="espill${isHP(r)?' hp':''}" data-anchor="fd-espace" data-dd="espace" title="Changer l'espace">${esc(g(r,'espace')||ESP_PROJET)} ▾</button>`:''}<button class="close" id="fclose" title="Fermer (Échap)">×</button></div>
     <div class="ftop">${fmeta}${propsHtml(r)}${acts}</div>
     <div class="fbody">
       ${map.description ? '' : (vote ? `<div class="sec">${vote}</div>` : '')}
@@ -1614,7 +1614,11 @@ function renderFiche(){
 
   /* --- branchements --- */
   $('fclose').onclick = closeFiche;
-  const saveTitle = ()=>{ const v=$('f-title').value.trim(), c=cur(); if (c && v && v!==c.titre) update(c,{titre:v}); };
+  const fit = ()=>{ const t = $('f-title'); t.style.height = 'auto'; t.style.height = (t.scrollHeight+2)+'px'; };   // le champ grandit avec le titre
+  fit();
+  $('f-title').oninput = fit;
+  $('f-title').onkeydown = e=>{ if (e.key==='Enter'){ e.preventDefault(); e.target.blur(); } };
+  const saveTitle = ()=>{ const v=$('f-title').value.replace(/\s*\n\s*/g,' ').trim(), c=cur(); if (c && v && v!==c.titre) update(c,{titre:v}); };
   $('f-title').onchange = saveTitle; $('f-title').onblur = saveTitle;
   f.querySelectorAll('[data-dd]').forEach(b=>{
     b.onclick = e=>{ if (e.target.closest('.x')) return; openMenu('fd-'+b.dataset.dd, fieldMenu(id, b.dataset.dd)); };
