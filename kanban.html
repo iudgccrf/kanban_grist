@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Kanban Grist</title>
-<script src="https://docs.getgrist.com/grist-plugin-api.js"></script>
+<script src="https://grist.numerique.gouv.fr/grist-plugin-api.js"></script>
 <style>
   :root { --bg:#f4f5f7; --col:#eeeef0; --card:#fff; --txt:#161616; --muted:#666; --accent:#3a55d8; --accent-bg:#e3e8fb; }
   * { box-sizing:border-box; }
@@ -116,7 +116,7 @@
   .ci.done input[type=text] { text-decoration:line-through; color:#888; }
   .ci .del, .att .del, .cm .del { border:0; background:none; cursor:pointer; color:#999; font-size:16px; }
   .ci .del:hover, .att .del:hover, .cm .del:hover { color:#c00; }
-  .drop { border:2px dashed #b9c3ee; background:#f1f4ff; border-radius:8px; padding:16px; text-align:center; color:#33408f; cursor:pointer; }
+  .drop { display:block; border:2px dashed #b9c3ee; background:#f1f4ff; border-radius:8px; padding:16px; text-align:center; color:#33408f; cursor:pointer; }
   .drop.over { background:#dfe6ff; border-color:var(--accent); }
   .drop b { text-decoration:underline; }
   .att { display:flex; align-items:center; gap:8px; padding:6px 8px; border:1px solid #e1e4ec; border-radius:6px; margin-bottom:6px; }
@@ -164,6 +164,33 @@
   .acts { display:flex; align-items:center; gap:10px; margin:10px 0 0; }
   .btn.danger { background:#c0392b; border-color:#c0392b; color:#fff; }
   #pop select { font:inherit; padding:5px 6px; border:1px solid #ccc; border-radius:4px; flex:1; min-width:0; }
+  /* notifications */
+  #bell { position:relative; width:32px; height:30px; padding:0; display:inline-flex; align-items:center; justify-content:center; color:#333; }
+  #bell.on { background:var(--accent-bg); border-color:var(--accent); }
+  #bell .nb { position:absolute; top:-6px; right:-6px; min-width:18px; height:18px; padding:0 4px; border-radius:9px; background:#b3261e; color:#fff; font-size:11px; font-weight:700; line-height:18px; text-align:center; }
+  #notifs { display:none; position:fixed; z-index:30; top:48px; right:10px; width:min(420px,calc(100vw - 20px)); max-height:min(640px,calc(100vh - 60px)); flex-direction:column; background:#fff; border:1px solid #bbb; border-radius:8px; box-shadow:0 8px 28px rgba(0,0,0,.28); }
+  #notifs .nh { display:flex; align-items:center; gap:8px; padding:10px 14px 6px; }
+  #notifs .nh b { flex:1; font-size:15px; }
+  #notifs .lnkb { border:0; background:none; color:#2b3a9a; text-decoration:underline; cursor:pointer; font:inherit; font-size:12px; padding:4px; }
+  #notifs .nf { display:flex; gap:6px; padding:0 14px 8px; border-bottom:1px solid #eee; }
+  #notifs .nlist { overflow-y:auto; flex:1; min-height:60px; }
+  .ni { display:flex; gap:10px; width:100%; text-align:left; padding:10px 14px; border:0; border-bottom:1px solid #eee; background:#fff; cursor:pointer; font:inherit; color:inherit; }
+  .ni:hover { background:#f1f3fb; }
+  .ni.unread { background:#f3f5fe; }
+  .ni.assign { background:#fff1e3; box-shadow:inset 0 0 0 2px #c2410c; }
+  .ni .ic, #ntoast .ic { flex:none; width:32px; height:32px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-weight:700; font-size:15px; }
+  .ni .bd { flex:1; min-width:0; }
+  .ni .k { display:block; font-size:11px; color:#595959; margin-bottom:2px; }
+  .ni .k b { color:#9a3412; letter-spacing:.02em; }
+  .ni .t { display:block; line-height:1.35; overflow-wrap:anywhere; }
+  .ni.unread .t { font-weight:700; }
+  .ni .d { display:block; font-size:12px; color:#595959; margin-top:3px; overflow-wrap:anywhere; }
+  .ni .pt { flex:none; align-self:center; width:9px; height:9px; border-radius:50%; background:var(--accent); }
+  #notifs .nfoot { padding:7px 14px; border-top:1px solid #eee; font-size:12px; color:#595959; }
+  #ntoast { display:none; position:fixed; z-index:35; top:10px; right:10px; width:min(380px,calc(100vw - 20px)); align-items:center; gap:10px; padding:10px 12px; background:#fff1e3; border:2px solid #c2410c; border-radius:8px; box-shadow:0 8px 28px rgba(0,0,0,.3); cursor:pointer; }
+  #ntoast .tx { flex:1; min-width:0; line-height:1.35; overflow-wrap:anywhere; }
+  .hlflash { background:#fff3c4 !important; outline:2px solid #d9a400; border-radius:6px; }
+  .tag.hp { background:#ece7f6; color:#4b2e83; }
 </style>
 </head>
 <body>
@@ -172,13 +199,15 @@
 <div id="board"><div class="msg">Chargement… Associez les colonnes dans le panneau de configuration du widget.</div></div>
 <div id="panel"></div>
 <div id="fiche"></div>
+<div id="notifs"></div>
+<div id="ntoast"></div>
 <div id="menu"></div>
 <div id="modal"></div>
 <div id="pop"></div>
 
 <script>
 /* ============ CONFIGURATION ============ */
-const VERSION = '2026-11-02 l';   // affichée dans le bandeau et le diagnostic : permet de vérifier que le bon fichier est chargé
+const VERSION = '2026-11-03 a';   // affichée dans le bandeau et le diagnostic : permet de vérifier que le bon fichier est chargé
 const STATUTS = ['A faire','En cours','Bloqué','A valider','Terminé','Abandonné','Archivé'];
 const PRIOS   = ['P0 Critique','P1 Important','P2 Souhaitable','P3 Appréciable','Nouveau','Relégué','Abandonné','Déjà prévu'];
 const CHARGES = ['XS','S','M','L','XL'];
@@ -198,9 +227,24 @@ const PRIO_TAG = [[/^P0/,['#fcd9d9','#b3202f']],[/^P1/,['#fff0c2','#8a5a00']],[/
 const TABLES = {
   comments: {table:'Commentaires', pick:{task:/^tache/, parent:/^parent/, text:/^(texte|text|message|commentaire)/, author:/^(auteur|created_?by|cree_?par|qui)/, date:/^(date|created_?at|cree_?le|horodat|quand)/, email:/(courriel|couriel|e_?mail|^mail)/, mentions:/^mention/}},
   history:  {table:'Historique',   pick:{task:/^tache/, event:/^(evenement|event|champ|type)/, before:/^(avant|ancien)/, after:/^(apres|nouveau|nouvelle)/, author:/^(auteur|created_?by|cree_?par|qui)/, date:/^(date|created_?at|cree_?le|horodat|quand)/, email:/(courriel|couriel|e_?mail|^mail)/}},
+  notifs:   {table:'Notifications', pick:{recipient:/^destinataire/, type:/^type/, task:/^tache/, comment:/^commentaire/, author:/^(auteur|created_?by|cree_?par)/, text:/^(texte|message)/, date:/^(cree_?le|created_?at|date)/, read:/^lu$/}},
+};
+const ESP_PROJET = 'Projet', ESP_HP = 'Hors projet';
+const GROUP_MS = 5*60*1000;      // modifications regroupées dans la cloche
+// Icônes des notifications : chaque type a sa forme et sa couleur (la couleur ne porte jamais seule le sens)
+const SVG = p => `<svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">${p}</svg>`;
+const NOTIF_TYPES = {
+  mention:      {label:'Mention',           bg:'#e3e8fb', fg:'#2b3a9a', icon:'<b>@</b>'},
+  assignation:  {label:'NOUVELLE ASSIGNATION', bg:'#c2410c', fg:'#fff', icon:SVG('<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M19 8v6M16 11h6"/>')},
+  modification: {label:'Modification',      bg:'#e6e8ec', fg:'#333', icon:SVG('<path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/>')},
+  reponse:      {label:'Réponse',           bg:'#d6eef7', fg:'#1f5f78', icon:SVG('<path d="m9 17-5-5 5-5"/><path d="M20 18v-2a4 4 0 0 0-4-4H4"/>')},
+  commentaire:  {label:'Commentaire',       bg:'#d9ecec', fg:'#245f5f', icon:SVG('<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2Z"/>')},
+  echeance:     {label:'Échéance proche',   bg:'#ffe0b8', fg:'#8a3b00', icon:SVG('<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>')},
+  retard:       {label:'Échéance dépassée', bg:'#a3121d', fg:'#fff', icon:SVG('<path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/><path d="M12 9v4M12 17h.01"/>')},
 };
 const SIDE_POLL_MS = 15000;
-const HIST_KEYS = {statut:'Statut', prio:'Prio', charge:'Charge', echeance:'Échéance', responsables:'Responsables'};   // champs dont les changements sont journalisés
+const HIST_KEYS = {espace:'Espace', statut:'Statut', prio:'Prio', charge:'Charge', echeance:'Échéance', responsables:'Responsables'};   // champs dont les changements sont journalisés
+const NOTIF_SKIP = ['votes','votants','commentaires','creePar','creeLe','modifPar','modifLe','supprimee','personnes'];   // champs qui ne déclenchent pas de notification
 const CARD_KEYS = ['statut','prio','charge'];       // champs modifiables avec le bouton ＋ des cartes
 const STATUT_DEFAUT = 'A faire';
 
@@ -209,6 +253,7 @@ const FIELDS = [
   {key:'statut',       label:'Statut',       kind:'single', fallback:STATUTS},
   {key:'prio',         label:'Prio',         kind:'single', fallback:PRIOS},
   {key:'charge',       label:'Charge',       kind:'single', fallback:CHARGES},
+  {key:'espace',       label:'Espace',       kind:'single', fallback:[ESP_PROJET, ESP_HP]},
   {key:'personas',     label:'Personas',     kind:'tags'},
   {key:'themes',       label:'Thèmes',       kind:'tags'},
   {key:'produit',      label:'Produit',      kind:'tags'},
@@ -232,6 +277,7 @@ const FILTERS = [   // dans l'ordre d'affichage de la barre du haut
 
 const COLS = [
   {name:'titre',        title:'Titre de la tâche',                    type:'Text'},
+  {name:'espace',       title:'Espace (Projet / Hors projet)',        type:'Choice', optional:true},
   {name:'statut',       title:'Statut (colonnes du Suivi)',           type:'Choice'},
   {name:'prio',         title:'Priorité (colonnes du Backlog)',       type:'Choice'},
   {name:'charge',       title:'Charge (XS…XL)',                       type:'Choice', optional:true},
@@ -258,9 +304,16 @@ const COLS = [
 
 /* ============ ÉTAT ============ */
 const $ = id => document.getElementById(id);
-let mode = 'suivi';            // suivi | backlog | perso
-let moi = lsGet('moi','');   // personne qui utilise CE navigateur (mémorisée dans le navigateur, pas partagée)
-let grpBy = {suivi:'statut', perso:'statut', backlog:'prio'};   // regroupement des colonnes, par vue
+let mode = lsGet('mode','suivi');   // suivi | backlog | perso | corbeille : propre à ce navigateur
+let docKey = '';               // identifiant du document : l'identité est mémorisée par document
+let moi = '';                  // nom de la personne qui utilise CE navigateur
+let moiId = null;              // sa ligne dans Equipe : survit à un renommage
+let persoFor = '';             // Mes tâches : '' = moi, '*' = tout le monde, sinon nom d'une personne
+let notifOpen = false, notifFilter = 'all', notifSeen = [], toastShown = new Set(), toastTimer = null;
+let ficheFocus = null;         // élément à mettre en évidence dans la fiche : {sel, scrolled, until}
+let uploadNote = '';           // envoi de pièces jointes en cours
+let delcId = null;             // commentaire dont la suppression attend confirmation
+let grpBy = {suivi:'statut', perso:'statut', backlog:'prio', ...lsGet('groups',{})};   // regroupement des colonnes, par vue et propre à ce navigateur
 let askedMe = false, askResolve = null;   // question « Qui êtes-vous ? »
 let descEdit = null;          // carte dont la description est en cours de modification
 let delConfirm = null;        // carte dont la suppression attend confirmation
@@ -281,7 +334,7 @@ let metaTick = 0, metaSig = '', meta = {}, metaNote = '';
 let team = [], teamById = {}, teamCol = null, teamTable = null;
 let attMeta = {};              // id de pièce jointe -> {name, size}
 const mkSide = ()=>({rows:[], ok:null, note:'', tick:0, sig:'', cols:null, fill:new Set()});
-const side = {comments: mkSide(), history: mkSide()};   // tables annexes
+const side = {comments: mkSide(), history: mkSide(), notifs: mkSide()};   // tables annexes
 let histNote = '';
 let flashNote = '', flashTimer = null;   // message d'erreur visible dans la page
 function flash(msg){ flashNote = msg; clearTimeout(flashTimer); flashTimer = setTimeout(()=>{ flashNote = ''; renderWarn(); }, 25000); renderWarn(); }
@@ -330,6 +383,7 @@ function refIds(v){   // identifiants de lignes d'une colonne Référence / List
   }).filter(x=>typeof x==='number' && x>0);
 }
 function g(r,k){ return map && map[k] ? r[k] : undefined; }
+const isHP = r => !!(map && map.espace && norm(r && r.espace)===norm(ESP_HP));              // tâche hors projet
 const isDel = r => !!(map && map.supprimee && r && r.supprimee);                        // tâche à la corbeille
 const prioEff = r => g(r,'prio') || (mode==='backlog' ? PRIO_NOUVEAU : '');           // Backlog : une prio vide compte comme « Nouveau"
 // valeurs d'une fiche pour un champ, sous forme de liste de textes
@@ -398,7 +452,12 @@ function checklistCount(t){ const {items} = parseChecklist(t); return {done: ite
 function lsGet(k, d){ try { const v = localStorage.getItem('kanban.'+k); return v==null ? d : JSON.parse(v); } catch(e){ return d; } }
 function lsSet(k, v){ try { localStorage.setItem('kanban.'+k, JSON.stringify(v)); } catch(e){} }
 const norm = s => String(s==null?'':s).normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase().trim();
-const meObj = () => team.find(t=>t.label===moi) || null;
+const meObj = () => team.find(t=>t.id===moiId) || team.find(t=>t.label===moi) || null;
+function setMe(p){ moiId = p ? p.id : null; moi = p ? p.label : ''; if (docKey){ lsSet('moiId:'+docKey, moiId); lsSet('moi:'+docKey, moi); } }
+function syncMe(){ const m = meObj(); if (m && (m.id!==moiId || m.label!==moi)) setMe(m); }
+// Le courriel posé par Grist sur une ligne que je viens d'écrire (formule d'initialisation user.Email) est la seule identité sûre : il remplace le nom choisi.
+function learnIdentity(email){ const n = norm(email); if (!n) return; const p = team.find(t=>norm(t.email)===n); if (p && p.id!==moiId){ setMe(p); render(); } }
+function personOf(row){ const n = norm(row.email), a = norm(row.author); return team.find(t=>n && norm(t.email)===n) || team.find(t=>a && (norm(t.label)===a || norm(t.label)===norm(who(row.author)))) || null; }
 function who(s){   // nom lisible : « prenom.nom », courriel ou nom → nom de la table Equipe quand on le retrouve
   s = String(s==null?'':s).trim(); if (!s) return '';
   const n = norm(s);
@@ -453,7 +512,9 @@ async function ensureMeta(force){
   if (!host || !map || (sig===metaSig && !force)) return;
   metaSig = sig;
   await loadMeta();
+  syncMe();
   ingest();
+  maybeAsk('Pour afficher vos notifications et vos tâches.');
 }
 async function reloadMeta(){ metaSig=''; await ensureMeta(true); }
 // valeurs proposées : choix déclarés dans la colonne Grist (sinon valeurs par défaut) + valeurs déjà utilisées
@@ -499,6 +560,7 @@ async function loadTable(kind, again){
     if (!c.task) throw new Error('colonne « Tache » (référence vers Taches) absente');
     if (kind==='comments' && !c.text) throw new Error('colonne « Texte » absente');
     S.cols = c;
+    if (S.fill.size && c.email) S.fill.forEach(rid=>{ const i = (t.id||[]).indexOf(rid); if (i>=0 && t[c.email][i]) learnIdentity(t[c.email][i]); });
     if (S.fill.size && !again){
       const ups = fillBlanks(kind, t, c); S.fill.clear();
       if (ups.length){ await grist.docApi.applyUserActions(ups); return loadTable(kind, true); }
@@ -512,7 +574,7 @@ async function loadTable(kind, again){
   } catch(e){ S.rows = []; S.cols = null; S.ok = false; S.note = ((e&&e.message)||String(e)); sig = 'ko:'+S.note; }
   if (sig !== S.sig){ S.sig = sig; S.tick++; render(); }
 }
-const loadSide = () => Promise.all([loadTable('comments'), loadTable('history')]);
+const loadSide = () => Promise.all([loadTable('comments'), loadTable('history'), loadNotifs()]);
 function histActions(entries){
   const c = side.history.cols; if (!c || !c.task) return [];
   return entries.map(e=>{ const f = {[c.task]: e.taskId};
@@ -533,12 +595,26 @@ async function addComment(taskId, parentId, text){
   const res = await actRes([['AddRecord', TABLES.comments.table, null, f]]);
   if (!res) return false;
   const id = res.retValues && res.retValues[0]; if (typeof id==='number') side.comments.fill.add(id);
+  notifyComment(taskId, parentId, typeof id==='number' ? id : null, text, ids);
   await loadTable('comments'); return true;
+}
+function notifyComment(taskId, parentId, commentId, text, mentioned){
+  const card = index.get(taskId), to = new Map();   // une seule notification par personne : Mention > Réponse > Commentaire
+  if (card && map.responsables) refIds(card.responsables).forEach(p=>to.set(p,'Commentaire'));
+  const parent = parentId ? side.comments.rows.find(c=>c.id===parentId) : null, pa = parent && personOf(parent);
+  if (pa) to.set(pa.id,'Réponse');
+  mentioned.forEach(p=>to.set(p,'Mention'));
+  const short = text.length>140 ? text.slice(0,140)+'…' : text;
+  sendNotifs([...to].map(([p,type])=>({to:p, type, taskId, commentId, text:short})));
 }
 async function deleteComment(id){
   const del = new Set([id]); let grown = true;
   while (grown){ grown = false; side.comments.rows.forEach(c=>{ if (c.parent && del.has(c.parent) && !del.has(c.id)){ del.add(c.id); grown = true; } }); }
-  await actRes([...del].map(i=>['RemoveRecord', TABLES.comments.table, i]));
+  const row = side.comments.rows.find(c=>c.id===id);
+  const journal = row ? histActions([{taskId:row.task, event:'Commentaire', before:(row.text||'').slice(0,120), after:'supprimé'}]) : [];
+  delcId = null;
+  const res = await actRes(journal.concat([...del].map(i=>['RemoveRecord', TABLES.comments.table, i])));
+  if (res && journal.length) afterHistoryWrite([(res.retValues||[])[0]]);
   await loadTable('comments');
 }
 function mentionHtml(text){
@@ -552,8 +628,10 @@ function mentionHtml(text){
 // changes : {cléWidget: valeur affichée} ; encoded : {cléWidget: valeur envoyée à Grist} (listes : ['L', ...])
 async function update(card, changes, encoded, extraLog){
   const cols = {}, applied = {}, log = (extraLog||[]).map(e=>({taskId: card.id, ...e}));
+  const respBefore = map.responsables ? refIds(card.responsables) : [], notes = [];
   for (const k in changes){
     if (!map[k]) continue;
+    if (!HIST_KEYS[k] && !NOTIF_SKIP.includes(k) && k!=='pj' && JSON.stringify(card[k]??null)!==JSON.stringify(changes[k]??null)) notes.push(k==='titre' ? 'Titre modifié' : ((FIELDS.find(f=>f.key===k)||{label:k==='description'?'Description':k==='checklist'?'Checklist':k}).label+' modifié(e)'));
     if (HIST_KEYS[k]){ const b = valLabel(card,k), a = valLabel(card,k,changes[k]); if (b!==a) log.push({taskId: card.id, event: HIST_KEYS[k], before: b, after: a}); }
     card[k] = changes[k]; applied[k] = changes[k];
     cols[map[k]] = (encoded && k in encoded) ? encoded[k] : changes[k];
@@ -570,8 +648,17 @@ async function update(card, changes, encoded, extraLog){
     else { res = await actRes(main); if (res) histNote = "Le journal n'a pas pu être enregistré : vérifiez la table « Historique » (droits, colonnes)."; }
   } else res = await actRes(main);
   if (!res){ pending.delete(card.id); ingest(); return false; }
+  notifyUpdate(card, respBefore, notes.concat(log.map(notePart)));
   verifyWrite(card.id, applied, cols);
   return true;
+}
+const notePart = e => e.event==='Suppression' ? 'Mise à la corbeille' : e.event==='Restauration' ? 'Restaurée depuis la corbeille' : (e.before ? `${e.event} : ${e.before} → ${e.after||'∅'}` : `${e.event} : ${e.after||'∅'}`);
+function notifyUpdate(card, before, parts){
+  if (!map.responsables || !parts.length) return;
+  const after = refIds(card.responsables), detail = parts.join(' · ').slice(0,300), list = [];
+  after.forEach(p=>list.push(before.includes(p) ? {to:p, type:'Modification', taskId:card.id, text:detail} : {to:p, type:'Assignation', taskId:card.id, text:'Responsables : '+after.map(x=>teamById[x]||('#'+x)).join(', ')}));
+  before.filter(p=>!after.includes(p)).forEach(p=>list.push({to:p, type:'Modification', taskId:card.id, text:'Vous avez été retiré(e) des responsables'}));
+  sendNotifs(list);
 }
 /* Contrôle : Grist a-t-il vraiment gardé la modification ? (une formule déclenchée ou une règle peut la remplacer) */
 const VERIFY_KEYS = ['responsables','votants','statut','prio','charge'];
@@ -626,11 +713,6 @@ function setField(card, key, v){   // choisit (ou décoche) une valeur
   if (isMulti(key)){ const next = has ? cur.filter(x=>x!==v) : [...cur, v]; return update(card, {[key]: next}, {[key]: ['L',...next]}); }
   return update(card, {[key]: has ? null : v});
 }
-function clearField(card, key){
-  if (key==='responsables') return update(card, {responsables: isListRef()?[]:0}, {responsables: isListRef()?['L']:0});
-  if (isMulti(key)) return update(card, {[key]: []}, {[key]: ['L']});
-  return update(card, {[key]: null});
-}
 function removeValue(card, key, v){ if (key==='responsables') return setField(card,key,+v); return setField(card,key,String(v)); }
 
 /* --- votes : un vote par personne si la colonne Votants est associée --- */
@@ -677,12 +759,16 @@ async function deleteTask(card){
   if (!card) return false;
   const id = card.id, title = card.titre || '';
   const cs = side.comments.ok ? side.comments.rows.filter(c=>c.task===id).map(c=>c.id) : [];
-  const hist = histActions([{taskId:id, event:'Suppression définitive', before:title, after:''}]);
-  const rm = [...(cs.length ? [['BulkRemoveRecord', TABLES.comments.table, cs]] : []), ['RemoveRecord', host, id]];
+  const hp = isHP(card), resp = map.responsables ? refIds(card.responsables) : [];
+  // Hors projet : aucune trace du titre et plus d'historique. Une ligne de journal sans tâche échapperait à la règle d'accès.
+  const hist = hp ? [] : histActions([{taskId:id, event:'Suppression définitive', before:title, after:''}]);
+  const hs = (hp && side.history.ok) ? historyOf(id).map(h=>h.id) : [];
+  const rm = [...(cs.length ? [['BulkRemoveRecord', TABLES.comments.table, cs]] : []), ...(hs.length ? [['BulkRemoveRecord', TABLES.history.table, hs]] : []), ['RemoveRecord', host, id]];
   let res = hist.length ? await actRes(hist.concat(rm), true) : null;
   if (res){ histNote = ''; afterHistoryWrite([(res.retValues||[])[0]]); }
   else { res = await actRes(rm); if (res && hist.length) histNote = "Le journal n'a pas pu être enregistré : vérifiez la table « Historique » (droits, colonnes)."; }
   if (!res) return false;
+  sendNotifs(resp.map(p=>({to:p, type:'Modification', taskId:0, text:`« ${title} » a été supprimée définitivement`})));
   pending.delete(id); rawRecs = rawRecs.filter(r=>r.id!==id); delConfirm = null; openId = null; ficheSig = ''; closeMenu();
   ingest();
   loadTable('comments');
@@ -696,10 +782,10 @@ function askMe(reason){
   askPromise = new Promise(res=>{
     askResolve = ()=>{ askPromise = null; res(meObj()); };
     const p = $('pop'); p.style.display = 'block';
-    p.innerHTML = `<b>Qui êtes-vous ?</b><div class="hint">${esc(reason)} Votre choix est mémorisé dans ce navigateur (pas partagé).</div>
+    p.innerHTML = `<b>Qui êtes-vous ?</b><div class="hint">${esc(reason)} Votre choix est mémorisé dans ce navigateur, puis confirmé par votre compte Grist dès votre premier commentaire.</div>
       <div class="row"><select id="qm"><option value="">— choisir —</option>${team.map(t=>`<option>${esc(t.label)}</option>`).join('')}</select></div>
       <div class="row" style="justify-content:flex-end"><button id="qm-skip">Plus tard</button><button class="primary" id="qm-ok">Valider</button></div>`;
-    const done = v=>{ if (v){ moi = v; lsSet('moi', moi); } closePop(); render(); };
+    const done = v=>{ if (v){ const pp = team.find(t=>t.label===v); if (pp) setMe(pp); } closePop(); render(); };
     $('qm-ok').onclick = ()=>done($('qm').value); $('qm-skip').onclick = ()=>done('');
   });
   return askPromise;
@@ -739,7 +825,7 @@ async function createAndSet(card, key, name){
     catch(e){ flash('Création impossible : '+((e&&e.message)||e)); }
     return;
   }
-  if (FIELDS.find(f=>f.key===key).kind==='tags' || true){ await addChoice(key, name); }
+  await addChoice(key, name);
   if (!L(card,key).includes(name)) await setField(card,key,name);
 }
 
@@ -774,14 +860,14 @@ function fieldMenu(cardId, key, fromPicker){
       const d = toDate(g(c,'echeance')), editable = meta.echeance && meta.echeance.type==='Date';
       html += editable ? `<div class="row"><input type="date" id="mn-date" value="${d?d.toISOString().slice(0,10):''}"></div>${d?'<span class="lnk" data-clr>Effacer la date</span>':''}`
                        : `<div class="mh" style="text-transform:none">Modifiable seulement pour une colonne de type « Date » (pas « Date et heure »).</div>`;
-    } else if (key==='statut' && !g(c,'statut') && !canEnterSuivi(c)){
+    } else if (key==='statut' && !g(c,'statut') && !canEnterSuivi(c) && !isHP(c)){
       html += `<div class="mh" style="text-transform:none;max-width:250px">Une carte ne passe en Suivi que depuis une prio P0 à P3 ou « Relégué ». Définissez d'abord sa prio.</div>`;
     } else {
       const multi = isMulti(key), sel = selectedOf(c,key).map(String);
       html += optionsFor(key).map(o=>{ const on = sel.includes(String(o.v));
         return `<label class="mi ${on?'pick':''}"><input type="${multi?'checkbox':'radio'}" data-opt="${esc(o.v)}" ${on?'checked':''}> ${f.kind==='single'||f.kind==='tags'?tag(o.label, key==='prio'?'prio':''):esc(o.label)}</label>`; }).join('');
       if (!optionsFor(key).length) html += '<div class="mh" style="text-transform:none">Aucune valeur : ajoutez-en ci-dessous.</div>';
-      html += `<div class="sep"></div><div class="row"><input type="text" id="mn-new" placeholder="${key==='responsables'?'Nouvelle personne…':'Nouvelle valeur…'}" autocomplete="off"><button class="btn soft" id="mn-add">+</button></div>
+      if (key!=='espace') html += `<div class="sep"></div><div class="row"><input type="text" id="mn-new" placeholder="${key==='responsables'?'Nouvelle personne…':'Nouvelle valeur…'}" autocomplete="off"><button class="btn soft" id="mn-add">+</button></div>
         <span class="lnk" data-mg>⚙ Gérer les valeurs…</span>`;
     }
     return { html, bind: el=>{
@@ -821,7 +907,7 @@ function filterOptions(f){
 }
 
 /* ============ GÉRER LES VALEURS (ajouter / renommer / supprimer) ============ */
-function manageKeys(){ return FIELDS.filter(f=>f.kind!=='date' && fieldOn(f) && (f.key!=='responsables' || (map.responsables && teamTable))); }
+function manageKeys(){ return FIELDS.filter(f=>f.kind!=='date' && f.key!=='espace' && fieldOn(f) && (f.key!=='responsables' || (map.responsables && teamTable))); }
 function openManage(key){ manage = {key: key==='personnes' ? 'responsables' : key, confirm:null, msg:''}; closeMenu(); renderManage(); }
 function closeManage(){ manage = null; $('modal').style.display='none'; }
 function usage(key, v){
@@ -867,24 +953,32 @@ async function mgAdd(key, v){
   if (meta[key] && meta[key].choices.includes(v)) throw new Error('cette valeur existe déjà');
   await widgetOptsWrite(key, wo=>wo.choices.push(v));
 }
-function rowsUpdate(key, fn){   // fn(card) -> nouvelle valeur envoyée à Grist, ou undefined si inchangé
-  const ids = [], vals = [];
-  records.forEach(r=>{ const nv = fn(r); if (nv !== undefined){ ids.push(r.id); vals.push(nv); } });
-  return ids.length ? grist.docApi.applyUserActions([['BulkUpdateRecord', host, ids, {[map[key]]: vals}]]) : Promise.resolve();
+/* Part de la table entière, pas des lignes reçues par le widget : un filtre de section ne doit pas laisser de cartes non mises à jour.
+   fn(enregistrement) -> nouvelle valeur envoyée à Grist, ou undefined si inchangé. */
+async function rowsAction(key, fn){
+  const col = map[key], t = await grist.docApi.fetchTable(host), ids = [], vals = [];
+  (t.id||[]).forEach((id,i)=>{ const nv = fn({id, [key]: t[col] ? t[col][i] : null}); if (nv !== undefined){ ids.push(id); vals.push(nv); } });
+  return ids.length ? [['BulkUpdateRecord', host, ids, {[col]: vals}]] : [];
+}
+function optsAction(key, mutate){
+  const m = meta[key]; if (!m) throw new Error('colonne introuvable (métadonnées non chargées)');
+  const wo = JSON.parse(JSON.stringify(m.woObj||{})); wo.choices = [...(wo.choices||m.choices||[])];
+  mutate(wo);
+  return ['ModifyColumn', host, m.col, {widgetOptions: JSON.stringify(wo)}];
 }
 async function mgRename(key, oldV, newV){
   if (key==='responsables'){ await grist.docApi.applyUserActions([['UpdateRecord', teamTable, oldV, {[teamCol]: newV}]]); return; }
   if (meta[key] && meta[key].choices.includes(newV)) throw new Error('cette valeur existe déjà');
-  await widgetOptsWrite(key, wo=>{
-    wo.choices = wo.choices.map(c=>c===oldV?newV:c);
-    if (wo.choiceOptions && oldV in wo.choiceOptions){ wo.choiceOptions[newV] = wo.choiceOptions[oldV]; delete wo.choiceOptions[oldV]; }
-  });
   const list = isListCol(key);
-  await rowsUpdate(key, r=>{
+  const rows = await rowsAction(key, r=>{
     const cur = L(r,key); if (!cur.includes(oldV)) return undefined;
     const next = [...new Set(cur.map(x=>x===oldV?newV:x))];
     return list ? ['L',...next] : newV;
   });
+  await grist.docApi.applyUserActions([optsAction(key, wo=>{
+    wo.choices = wo.choices.map(c=>c===oldV?newV:c);
+    if (wo.choiceOptions && oldV in wo.choiceOptions){ wo.choiceOptions[newV] = wo.choiceOptions[oldV]; delete wo.choiceOptions[oldV]; }
+  }), ...rows]);   // une seule opération : tout passe, ou rien
   // les couleurs et l'ordre mémorisés suivent la valeur renommée
   let changed = false;
   if (colors.tags[oldV]){ colors.tags[newV]=colors.tags[oldV]; delete colors.tags[oldV]; changed = true; }
@@ -895,12 +989,12 @@ async function mgRename(key, oldV, newV){
 async function mgDelete(key, v){
   if (key==='responsables'){
     const list = isListRef();
-    await rowsUpdate('responsables', r=>{ const cur = refIds(r.responsables); if (!cur.includes(v)) return undefined; const next = cur.filter(x=>x!==v); return list ? ['L',...next] : 0; });
-    await grist.docApi.applyUserActions([['RemoveRecord', teamTable, v]]); return;
+    const rows = await rowsAction('responsables', r=>{ const cur = refIds(r.responsables); if (!cur.includes(v)) return undefined; const next = cur.filter(x=>x!==v); return list ? ['L',...next] : 0; });
+    await grist.docApi.applyUserActions([...rows, ['RemoveRecord', teamTable, v]]); return;
   }
-  await widgetOptsWrite(key, wo=>{ wo.choices = wo.choices.filter(c=>c!==v); if (wo.choiceOptions) delete wo.choiceOptions[v]; });
   const list = isListCol(key);
-  await rowsUpdate(key, r=>{ const cur = L(r,key); if (!cur.includes(v)) return undefined; const next = cur.filter(x=>x!==v); return list ? ['L',...next] : null; });
+  const rows = await rowsAction(key, r=>{ const cur = L(r,key); if (!cur.includes(v)) return undefined; const next = cur.filter(x=>x!==v); return list ? ['L',...next] : null; });
+  await grist.docApi.applyUserActions([optsAction(key, wo=>{ wo.choices = wo.choices.filter(c=>c!==v); if (wo.choiceOptions) delete wo.choiceOptions[v]; }), ...rows]);
 }
 
 /* ============ COLONNES DU KANBAN (selon la vue) ============ */
@@ -974,11 +1068,13 @@ function inView(r){
   if (mode==='corbeille') return isDel(r);
   if (isDel(r)) return false;
   const hasStatut = !!g(r,'statut');
+  if (mode==='perso') return isHP(r) || hasStatut;             // Mes tâches : le Suivi et le hors projet
+  if (isHP(r)) return false;                                   // Suivi et Backlog : uniquement le projet
   return mode==='backlog' ? !hasStatut : hasStatut;
 }
 function passes(r){
   if (!inView(r)) return false;
-  if (mode==='perso' && moi && !L(r,'personnes').includes(moi)) return false;     // "Mes tâches" : mes tâches uniquement
+  if (mode==='perso'){ const target = persoFor==='*' ? '' : (persoFor || moi); if (target && !L(r,'personnes').includes(target)) return false; }
   for (const f of FILTERS){
     if (f.skipIn===mode) continue;
     const sel = F[f.id]; if (!sel.length) continue;
@@ -1010,7 +1106,7 @@ function renderHeader(){
     if (gks.length>1) r1 += `<label>Grouper par <select id="f-grp">${gks.map(k=>`<option value="${k}" ${groupKey()===k?'selected':''}>${GROUP_LABELS[k]}</option>`).join('')}</select></label>`;
     if (mode==='perso'){
       const names = team.length ? team.map(t=>t.label) : [...new Set(records.flatMap(r=>L(r,'personnes')))].sort((a,b)=>a.localeCompare(b,'fr'));
-      r1 += `<label title="Votre nom : sert à filtrer vos tâches (mémorisé sur cet ordinateur)">Moi <select id="f-moi"><option value="">— tout le monde —</option>${names.map(n=>`<option ${n===moi?'selected':''}>${esc(n)}</option>`).join('')}</select></label>`;
+      r1 += `<label title="Par défaut, vos tâches. Vous ne voyez que les tâches hors projet auxquelles vous avez accès.">Tâches de <select id="f-for"><option value="" ${!persoFor?'selected':''}>Moi${moi?' ('+esc(moi)+')':''}</option><option value="*" ${persoFor==='*'?'selected':''}>Tout le monde</option>${names.filter(n=>n!==moi).map(n=>`<option ${n===persoFor?'selected':''}>${esc(n)}</option>`).join('')}</select></label>`;
     }
     let fl = '';
     FILTERS.forEach(f=>{
@@ -1025,30 +1121,32 @@ function renderHeader(){
     r2 += `<button class="fb ${ns?'active':''}" data-anchor="sort" id="sortBtn" title="Trier les cartes de chaque colonne">Tri${ns?` (${ns})`:''} ▾</button>`;
   }
   r2 += `<input type="search" id="f-q" placeholder="Mot clé…" value="${esc(F.q)}">`;
-  r2 += `<button id="reset">Réinitialiser</button><span class="spacer"></span><button id="mgBtn" title="Ajouter, renommer, supprimer des valeurs">✎ Valeurs</button><button id="diagBtn" title="Diagnostic">🔧 Diagnostic</button><button id="colorsBtn">🎨 Couleurs</button>`;
+  r2 += `<button id="reset">Réinitialiser</button><span class="spacer"></span><button id="bell" aria-haspopup="true"></button><button id="mgBtn" title="Ajouter, renommer, supprimer des valeurs">✎ Valeurs</button><button id="diagBtn" title="Diagnostic">🔧 Diagnostic</button><button id="colorsBtn">🎨 Couleurs</button>`;
   $('hdr').innerHTML = `<div class="hrow">${r1}</div><div class="hrow">${r2}</div>`;
 
-  $('mode').onchange = e=>{ mode=e.target.value; grist.setOption('mode',mode); closeMenu(); render(); };
-  const mo = $('f-moi'); if (mo) mo.onchange = ()=>{ moi = mo.value; lsSet('moi',moi); render(); };
-  const gp = $('f-grp'); if (gp) gp.onchange = ()=>{ grpBy[mode] = gp.value; grist.setOption('groups', grpBy); render(); };
+  $('mode').onchange = e=>{ mode=e.target.value; lsSet('mode',mode); closeMenu(); render(); if (mode==='perso') maybeAsk('Pour afficher vos tâches.'); };
+  const mo = $('f-for'); if (mo) mo.onchange = ()=>{ persoFor = mo.value; render(); };
+  const gp = $('f-grp'); if (gp) gp.onchange = ()=>{ grpBy[mode] = gp.value; lsSet('groups', grpBy); render(); };
+  $('bell').onclick = ()=>{ notifOpen = !notifOpen; if (notifOpen && !meObj()) maybeAsk('Pour afficher vos notifications.'); renderNotifs(); };
   const sb = $('sortBtn'); if (sb) sb.onclick = ()=>openMenu('sort', sortMenu());
   document.querySelectorAll('[data-fbtn]').forEach(b=>b.onclick=()=>{ const f = FILTERS.find(x=>x.id===b.dataset.fbtn); openMenu('f-'+f.id, filterMenu(f)); });
   const ff = $('f-from'); if (ff) ff.onchange = ()=>{ F.from=ff.value; render(); };
   const ft = $('f-to'); if (ft) ft.onchange = ()=>{ F.to=ft.value; render(); };
   const q=$('f-q'); if(q) q.oninput = ()=>{F.q=q.value; renderBoard();};
-  $('reset').onclick = ()=>{ FILTERS.forEach(f=>F[f.id]=[]); F.from=F.to=F.q=''; render(); };
+  $('reset').onclick = ()=>{ FILTERS.forEach(f=>F[f.id]=[]); F.from=F.to=F.q=''; persoFor=''; render(); };
   $('mgBtn').onclick = ()=>openManage(FIELDS.find(f=>fieldOn(f) && f.kind!=='date') ? (manageKeys()[0]||{}).key : null);
   $('diagBtn').onclick = ()=>{ diagOpen=!diagOpen; if(diagOpen) loadTableCount(); renderDiag(); };
   $('colorsBtn').onclick = ()=>{ panelOpen=!panelOpen; if(panelOpen) closeFiche(); renderPanel(); };
 }
 function renderWarn(){
   const parts = [];
+  if (map && !map.espace) parts.push(`<div class="warn"><b>⚠</b> Associez la colonne <b>Espace</b> dans la configuration du widget : sans elle, les tâches hors projet apparaissent dans le Suivi et le Backlog.</div>`);
   if (map){
     const total = records.length, shown = records.filter(passes).length, inv = records.filter(inView).length;
     if (mode==='corbeille') parts.push(`<div class="info">Corbeille : ces tâches restent dans la table (colonne « Supprimée » cochée). Restaurez une tâche pour la remettre dans le Kanban.</div>`);
     if ((!total || !shown) && !(mode==='corbeille' && total)){
       let t = `${total} ligne(s) reçue(s) de « ${esc(host||'?')} » · ${shown} affichée(s) dans cette vue`;
-      if (inv<total) t += ` · ${total-inv} dans l'autre vue (${mode==='backlog'?'Suivi':'Backlog'}) à cause du Statut`;
+      if (inv<total) t += ` · ${total-inv} dans une autre vue`;
       if (inv>shown) t += ` · ${inv-shown} masquée(s) par les filtres`;
       if (!total) t += ` — <b>Grist n'envoie aucune ligne</b> : vérifiez qu'aucun filtre n'est actif sur le widget (bouton « Enregistrer » / ↺ en haut à droite de la section).`;
       else t += ` (le Backlog affiche les cartes sans Statut, le Suivi celles qui ont un Statut).`;
@@ -1084,7 +1182,8 @@ function renderDiag(){
     'Métadonnées : '+(metaNote||'(aucune remarque)'),
     'Commentaires : '+(side.comments.ok===null?'non chargés':side.comments.ok?side.comments.note+' | colonnes '+JSON.stringify(side.comments.cols):'indisponibles – '+side.comments.note),
     'Historique : '+(side.history.ok===null?'non chargé':side.history.ok?side.history.note+' | colonnes '+JSON.stringify(side.history.cols):'indisponible – '+side.history.note),
-    'Moi (ce navigateur) : '+(moi||'(non choisi)')+' | tri : '+JSON.stringify(sortPref.filter(s=>s&&s.k)),
+    'Notifications : '+(side.notifs.ok===null?'non chargées':side.notifs.ok?side.notifs.note+' | colonnes '+JSON.stringify(side.notifs.cols):'indisponibles – '+side.notifs.note),
+    'Moi (ce navigateur) : '+(moi||'(non choisi)')+' | ligne Equipe '+moiId+' | courriel '+((meObj()||{}).email||'?')+' | hors projet visibles : '+records.filter(isHP).length+' | tri : '+JSON.stringify(sortPref.filter(s=>s&&s.k)),
     'Cartes affichables dans cette vue : '+(map?records.filter(passes).length:'?'),
     'Première ligne brute : '+(rawFirst?JSON.stringify(rawFirst):'(aucune)').slice(0,400),
     'Première ligne convertie : '+first.slice(0,400),
@@ -1114,6 +1213,7 @@ function dateBadge(r){
 }
 function cardHtml(r){
   let tags = '';
+  if (isHP(r)) tags += `<span class="tag hp">${esc(ESP_HP)}</span>`;
   if (mode!=='backlog' && g(r,'prio')) tags += tagX(g(r,'prio'),'prio');
   if (g(r,'charge')) tags += tagX(g(r,'charge'),'charge');
   ['etiquettes','personas','produit','themes','sources'].forEach(k=>L(r,k).forEach(t=>tags+=tagX(t,k)));
@@ -1148,7 +1248,7 @@ function renderBoard(){
   wire();
 }
 function render(){
-  try { rebuild(); renderHeader(); renderWarn(); renderBoard(); renderPanel(); renderFiche(); renderManage(); renderMenu(); renderDiag(); $('err').innerHTML=''; }
+  try { rebuild(); renderHeader(); renderWarn(); renderBoard(); renderPanel(); renderFiche(); renderManage(); renderMenu(); renderDiag(); renderNotifs(); $('err').innerHTML=''; }
   catch(e){ showError(e); }
 }
 function rebuild(){ if (map && mode==='corbeille' && !map.supprimee) mode = 'suivi'; index = new Map(records.map(r=>[r.id,r])); }
@@ -1188,13 +1288,22 @@ function openNewPop(group){
   p.innerHTML = `<b>Nouvelle carte</b> <span class="hint">(${esc(group)})</span>
     <div class="row"><input id="nt" placeholder="Titre de la tâche…" autocomplete="off"></div>
     <div class="row" style="justify-content:flex-end"><button id="ncancel">Annuler</button><button class="primary" id="nok">Créer</button></div>`;
+  const perso = mode==='perso';
+  if (perso) p.querySelector('.hint').textContent = '('+group+' · hors projet, à votre nom)';
   const ok = async ()=>{
     const t = $('nt').value.trim();
     if (!t) return; closePop();
     const gk = groupKey();
+    let me = null;
+    if (perso){
+      me = meObj() || await askMe('Pour créer une tâche à votre nom.');
+      if (!me || !map.responsables || !map.espace){ flash('Création impossible : indiquez qui vous êtes et associez les colonnes Responsables et Espace.'); return; }
+    }
     const f = {[map.titre]: t, [map[gk]]: group};                       // la colonne cliquée donne la valeur (Statut, Prio ou Charge)
     if (mode!=='backlog' && gk!=='statut' && map.statut) f[map.statut] = STATUT_DEFAUT;   // sinon la carte partirait au Backlog
     if (mode==='backlog' && gk!=='prio' && map.prio) f[map.prio] = PRIO_NOUVEAU;
+    if (map.espace) f[map.espace] = perso ? ESP_HP : ESP_PROJET;
+    if (perso) f[map.responsables] = isListRef() ? ['L', me.id] : me.id;
     const res = await actRes([['AddRecord', host, null, f]]);
     const id = res && res.retValues && res.retValues[0];
     if (typeof id==='number'){
@@ -1209,7 +1318,24 @@ function openNewPop(group){
 }
 
 /* ============ PIÈCES JOINTES ============ */
-
+async function uploadFiles(cardId, files){
+  files = [...(files||[])]; if (!files.length || uploadNote) return;
+  uploadNote = files.length>1 ? `Envoi de ${files.length} fichiers…` : `Envoi de « ${files[0].name} »…`; refreshFiche();
+  try {
+    const tok = await grist.docApi.getAccessToken({readOnly:false});   // jeton court demandé à Grist : jamais affiché ni conservé
+    const form = new FormData();
+    files.forEach(x=>form.append('upload', x, x.name));
+    const resp = await fetch(`${tok.baseUrl}/attachments?auth=${encodeURIComponent(tok.token)}`, {method:'POST', body:form, headers:{'X-Requested-With':'XMLHttpRequest'}});
+    if (!resp.ok){ const d = (await resp.text()).slice(0,200); throw new Error(resp.status===413 ? 'fichier trop volumineux pour ce serveur' : `réponse ${resp.status} du serveur ${d}`); }
+    const newIds = await resp.json();
+    const t = await grist.docApi.fetchTable(host), i = (t.id||[]).indexOf(cardId);   // relu dans Grist : un collègue a pu ajouter un fichier entre-temps
+    if (i<0) throw new Error('tâche introuvable');
+    const c = index.get(cardId), next = [...refIds(t[map.pj][i]), ...newIds];
+    uploadNote = '';
+    if (c) await update(c, {pj:next}, {pj:['L',...next]}, [{event:'Pièce jointe', before:'', after:files.map(x=>x.name).join(', ')}]);
+    await loadAttachMeta();
+  } catch(e){ uploadNote = ''; flash("Envoi impossible : "+((e&&e.message)||e)); refreshFiche(); }
+}
 
 async function downloadAttachment(id){
   try {
@@ -1221,11 +1347,11 @@ async function downloadAttachment(id){
 }
 
 /* ============ FICHE DE LA CARTE (version compacte) ============ */
-function openFiche(id){ openId = id; delConfirm = null; descEdit = null; panelOpen = false; ficheSig = ''; if (map && map.pj) loadAttachMeta(); render(); }
+function openFiche(id){ openId = id; delConfirm = null; delcId = null; descEdit = null; panelOpen = false; ficheSig = ''; if (map && map.pj) loadAttachMeta(); render(); }
 function closeFiche(){ if (openId===null) return; openId = null; delConfirm = null; descEdit = null; ficheSig = ''; $('fiche').style.display='none'; closeMenu(); renderBoard(); }
 function refreshFiche(){ ficheSig=''; renderFiche(); renderMenu(); }
 function sigOf(r){
-  return JSON.stringify([metaTick, delConfirm===r.id, descEdit===r.id, side.comments.tick, side.history.tick, moi, r.titre, g(r,'statut'), g(r,'prio'), g(r,'charge'), g(r,'description'), g(r,'checklist'), g(r,'echeance'), g(r,'responsables'), g(r,'personnes'), g(r,'pj'), g(r,'votes'), g(r,'votants'),
+  return JSON.stringify([uploadNote, delcId, r.espace, metaTick, delConfirm===r.id, descEdit===r.id, side.comments.tick, side.history.tick, moi, r.titre, g(r,'statut'), g(r,'prio'), g(r,'charge'), g(r,'description'), g(r,'checklist'), g(r,'echeance'), g(r,'responsables'), g(r,'personnes'), g(r,'pj'), g(r,'votes'), g(r,'votants'),
     g(r,'creePar'), g(r,'creeLe'), g(r,'modifPar'), g(r,'modifLe'), isDel(r), ...FIELDS.filter(f=>f.kind==='tags').map(f=>L(r,f.key))]);
 }
 function summaryHtml(r){
@@ -1265,10 +1391,10 @@ function commentsHtml(r){
   if (S.ok === null) return '<div class="none">Chargement…</div>';
   const list = commentsOf(r.id).sort((a,b)=>(a.date&&b.date) ? (a.date-b.date) : (a.id-b.id));
   const kids = pid => list.filter(c=>(c.parent||0)===pid);
-  const one = c=>{ const nm = who(c.author||c.email); return `<div class="cm"><div class="av" title="${esc(nm)}">${esc(initials(nm||'?'))}</div><div class="cb">
+  const one = c=>{ const nm = who(c.author||c.email); return `<div class="cm" id="cm-${c.id}"><div class="av" title="${esc(nm)}">${esc(initials(nm||'?'))}</div><div class="cb">
       <div class="ch"><b>${esc(nm||'Anonyme')}</b>${c.date?' · '+esc(fmtDateTime(c.date)):''}</div>
       <div class="ct">${mentionHtml(c.text)}</div>
-      <div class="ca"><button data-reply="${c.id}">Répondre</button><button data-delc="${c.id}">Supprimer</button></div>
+      <div class="ca"><button data-reply="${c.id}">Répondre</button><button data-delc="${c.id}">${delcId===c.id?'Confirmer la suppression (réponses incluses)':'Supprimer'}</button></div>
       <div id="rp-${c.id}" style="display:none"><textarea class="cmt" data-draft="reply-${c.id}" placeholder="Votre réponse… (@ pour citer quelqu'un)">${esc(drafts['reply-'+c.id]||'')}</textarea>
         <div class="row"><button class="btn ghost" data-at="reply-${c.id}" data-anchor="at-reply-${c.id}">@</button><button class="btn" data-send="${c.id}">Répondre</button></div></div>
       <div class="rep">${kids(c.id).map(one).join('')}</div></div></div>`; };
@@ -1276,7 +1402,7 @@ function commentsHtml(r){
   return `${top.map(one).join('') || '<div class="none">Aucun commentaire.</div>'}
     <div style="margin-top:12px"><textarea class="cmt" data-draft="new" placeholder="Écrire un commentaire… (@ pour citer quelqu'un)">${esc(drafts['new']||'')}</textarea>
       <div class="row"><button class="btn ghost" data-at="new" data-anchor="at-new">@ Citer</button><span class="grow"></span><button class="btn" id="cm-send">Publier</button></div>
-      ${meObj()?'':'<div class="none">Choisissez « Moi » en haut de la vue pour signer vos commentaires.</div>'}</div>`;
+      ${meObj()?'':'<div class="none">Indiquez qui vous êtes depuis la cloche 🔔 : vos notifications en dépendent.</div>'}</div>`;
 }
 function atMenu(draftKey){
   return ()=>({ html: '<div class="mh">Citer une personne</div>' + (team.map(t=>`<div class="mi" data-at-p="${esc(t.label)}">@${esc(t.label)}</div>`).join('') || '<div class="mh" style="text-transform:none">Liste des personnes indisponible</div>'),
@@ -1307,7 +1433,7 @@ function renderFiche(){
   if (mp || ml) fm.push('Modifiée'+(ml?' le '+esc(fmtDateTime(ml)):'')+(mp?' par '+esc(who(mp)):''));
   const fmeta = fm.length ? `<div class="fmeta">${fm.join(' · ')}</div>` : '';
   const soft = !!map.supprimee, inTrash = isDel(r);
-  const acts = inTrash ? `<div class="acts"><button class="btn" id="fp-restore" title="Remettre la tâche dans le Kanban">↩ Restaurer</button><span class="none">🗑 Cette tâche est à la corbeille.</span></div>` : (g(r,'statut') && map.prio) ? `<div class="acts"><button class="btn ghost" id="fp-back" title="La carte quitte le Suivi et va dans la colonne « ${esc(backlogPrioFor(r))} » du Backlog">⬅ Renvoyer au backlog</button><span class="none">→ colonne « ${esc(backlogPrioFor(r))} »</span></div>` : '';
+  const acts = (isHP(r) && !inTrash) ? '' : inTrash ? `<div class="acts"><button class="btn" id="fp-restore" title="Remettre la tâche dans le Kanban">↩ Restaurer</button><span class="none">🗑 Cette tâche est à la corbeille.</span></div>` : (g(r,'statut') && map.prio) ? `<div class="acts"><button class="btn ghost" id="fp-back" title="La carte quitte le Suivi et va dans la colonne « ${esc(backlogPrioFor(r))} » du Backlog">⬅ Renvoyer au backlog</button><span class="none">→ colonne « ${esc(backlogPrioFor(r))} »</span></div>` : '';
   const delHtml = delConfirm===r.id
     ? `<div class="sec"><div class="mmsg">${soft ? 'Supprimer définitivement cette tâche ? Elle disparaît de la table, avec ses commentaires. Cette action ne peut pas être annulée. Le journal en garde une trace.' : 'Supprimer cette tâche ? Elle disparaît du Kanban et de la table, avec ses commentaires. Le journal en garde une trace.'}</div><div class="row"><button class="btn danger" id="fp-delok">Oui, supprimer${soft?' définitivement':''}</button><button class="btn ghost" id="fp-delno">Annuler</button></div></div>`
     : (soft && !inTrash) ? `<div class="sec"><button class="btn ghost" id="fp-trash" title="La tâche reste dans la table et peut être restaurée">🗑 Mettre à la corbeille</button></div>`
@@ -1342,7 +1468,7 @@ function renderFiche(){
     const ids = refIds(g(r,'pj'));
     pj = `<div class="sec"><div class="sh">📎 Pièces jointes<span class="sub">${ids.length||''}</span></div>
       ${ids.map(i=>`<div class="att"><span>📄</span><a data-dl="${i}" title="Ouvrir">${esc((attMeta[i]&&attMeta[i].name)||('Fichier '+i))}</a><span class="sz">${fmtSize(attMeta[i]&&attMeta[i].size)}</span><button class="del" data-rmatt="${i}" title="Retirer de la carte">×</button></div>`).join('')}
-      <div class="none">Pour ajouter un fichier : cellule « PJ » de la ligne dans Grist (ou widget « Carte » lié à cette vue). Un widget ne peut pas envoyer de fichier vers ce serveur Grist.</div></div>`;
+      ${uploadNote ? `<div class="none">${esc(uploadNote)}</div>` : `<label class="drop" id="fp-drop"><input type="file" id="fp-file" multiple style="position:absolute;opacity:0;width:1px;height:1px"><b>Choisir des fichiers</b> ou les déposer ici</label>`}</div>`;
   }
 
   f.innerHTML = `<div class="fhead"><input type="text" class="ftitle" id="f-title" value="${esc(r.titre)}" placeholder="Titre de la tâche"><button class="close" id="fclose" title="Fermer (Échap)">×</button></div>
@@ -1354,10 +1480,11 @@ function renderFiche(){
       <div class="sec"><div class="sh">☑ Checklist${clCount.total?`<span class="sub">${clCount.done}/${clCount.total}</span>`:''}</div>${checklist}</div>
       ${pj}
       <div class="sec"><div class="sh">🗨️ Commentaires<span class="sub">${side.comments.ok?commentsOf(id).length:''}</span></div>${commentsHtml(r)}</div>
-      <div class="sec"><div class="sh">🕘 Historique<span class="sub">${side.history.ok?historyOf(id).length:''}</span></div>${historyHtml(r)}</div>
+      <div class="sec" id="fp-hist"><div class="sh">🕘 Historique<span class="sub">${side.history.ok?historyOf(id).length:''}</span></div>${historyHtml(r)}</div>
       ${delHtml}
     </div>`;
   f.scrollTop = keepScroll;
+  applyFicheFocus();
   if (keep){ const el = f.querySelector(keep.sel); if (el){ el.value = keep.v; el.focus(); try { el.setSelectionRange(keep.s, keep.e); } catch(e){} } }
 
   /* --- branchements --- */
@@ -1416,6 +1543,13 @@ function renderFiche(){
   }
 
   if (map.pj){
+    const fin = $('fp-file'); if (fin) fin.onchange = ()=>uploadFiles(id, fin.files);
+    const dz = $('fp-drop');
+    if (dz){
+      dz.ondragover = e=>{ e.preventDefault(); dz.classList.add('over'); };
+      dz.ondragleave = ()=>dz.classList.remove('over');
+      dz.ondrop = e=>{ e.preventDefault(); e.stopPropagation(); dz.classList.remove('over'); uploadFiles(id, e.dataTransfer.files); };
+    }
     f.querySelectorAll('[data-dl]').forEach(a=>a.onclick=()=>downloadAttachment(+a.dataset.dl));
     f.querySelectorAll('[data-rmatt]').forEach(b=>b.onclick=()=>{
       const c=cur(); if(!c) return; const rid=+b.dataset.rmatt, ids=refIds(g(c,'pj')).filter(i=>i!==rid);
@@ -1428,8 +1562,152 @@ function renderFiche(){
   f.querySelectorAll('[data-at]').forEach(b=>b.onclick=()=>openMenu(b.dataset.anchor, atMenu(b.dataset.at)));
   f.querySelectorAll('[data-reply]').forEach(b=>b.onclick=()=>{ const el=$('rp-'+b.dataset.reply); el.style.display = el.style.display==='none' ? 'block' : 'none'; const ta=el.querySelector('textarea'); if (el.style.display==='block') ta.focus(); });
   f.querySelectorAll('[data-send]').forEach(b=>b.onclick=async()=>{ const k='reply-'+b.dataset.send; const t=drafts[k]; if (await addComment(id, +b.dataset.send, t)){ delete drafts[k]; refreshFiche(); } });
-  f.querySelectorAll('[data-delc]').forEach(b=>b.onclick=()=>deleteComment(+b.dataset.delc));
+  f.querySelectorAll('[data-delc]').forEach(b=>b.onclick=()=>{ const cid = +b.dataset.delc; if (delcId===cid) deleteComment(cid); else { delcId = cid; refreshFiche(); } });
   const send = $('cm-send'); if (send) send.onclick = async()=>{ if (await addComment(id, 0, drafts['new'])){ delete drafts['new']; refreshFiche(); } };
+}
+
+/* ============ NOTIFICATIONS ============ */
+async function loadNotifs(){
+  const T = TABLES.notifs, S = side.notifs; let sig = '';
+  try {
+    const t = await grist.docApi.fetchTable(T.table), c = resolveCols(t, T.pick);
+    if (!c.recipient || !c.type) throw new Error('colonnes « Destinataire » et « Type » requises');
+    const cell = (col,i) => col ? t[col][i] : null;
+    S.cols = c;
+    S.rows = (t.id||[]).map((id,i)=>({id, recipient: refIds(cell(c.recipient,i))[0]||0, type: String(cell(c.type,i) ?? ''), task: refIds(cell(c.task,i))[0]||0, comment: refIds(cell(c.comment,i))[0]||0,
+      author: String(cell(c.author,i) ?? ''), text: String(cell(c.text,i) ?? ''), date: c.date ? toDate(cell(c.date,i)) : null, read: !!cell(c.read,i)}));
+    S.ok = true; S.note = S.rows.length+' ligne(s) visible(s)'; sig = JSON.stringify(S.rows);
+  } catch(e){ S.rows = []; S.cols = null; S.ok = false; S.note = (e&&e.message)||String(e); sig = 'ko:'+S.note; }
+  if (sig !== S.sig){ S.sig = sig; S.tick++; renderNotifs(); }
+}
+// Écrites à part de la modification : un refus sur Notifications ne doit jamais annuler le travail de l'utilisateur.
+async function sendNotifs(list){
+  const c = side.notifs.cols, me = meObj(), seen = new Set(); if (!c || !list.length) return;
+  const now = Math.floor(Date.now()/1000);
+  const acts = list.filter(n=>{ const k = n.to+'|'+n.type+'|'+n.taskId; if (!n.to || (me && n.to===me.id) || seen.has(k)) return false; seen.add(k); return true; }).map(n=>{
+    const f = {[c.recipient]: n.to, [c.type]: n.type};
+    if (c.task && n.taskId) f[c.task] = n.taskId;
+    if (c.comment && n.commentId) f[c.comment] = n.commentId;
+    if (c.text) f[c.text] = n.text||'';
+    if (c.date) f[c.date] = now;
+    return ['AddRecord', TABLES.notifs.table, null, f];
+  });
+  if (!acts.length) return;
+  try { await grist.docApi.applyUserActions(acts); }
+  catch(e){ flash("Votre modification est enregistrée, mais les notifications n'ont pas pu être créées : "+((e&&e.message)||e)); }
+}
+const typeKey = t => ({mention:'mention', assignation:'assignation', modification:'modification', reponse:'reponse', commentaire:'commentaire'}[norm(t)] || 'modification');
+function dueItems(){
+  const me = meObj(); if (!me || !map || !map.echeance) return [];
+  const out = [], today = dayStart(new Date());
+  records.forEach(r=>{
+    if (isDel(r) || !(g(r,'statut') || isHP(r))) return;
+    if (STATUT_TERMINE.includes(g(r,'statut')) || g(r,'statut')==='Abandonné') return;
+    if (!refIds(r.responsables).includes(me.id) && !L(r,'personnes').includes(me.label)) return;
+    const d = toDate(g(r,'echeance')); if (!d) return;
+    const diff = Math.round((dayStart(d)-today)/86400000); if (diff>1) return;
+    const key = `due:${r.id}:${dayStart(d).getTime()}:${diff<0?'late':'soon'}`;
+    out.push({key, due:true, type: diff<0?'retard':'echeance', ids:[], taskId:r.id, author:'', texts:['Échéance : '+d.toLocaleDateString('fr-FR')], date:today, unread:!notifSeen.includes(key), diff});
+  });
+  return out;
+}
+function notifItems(){
+  const me = meObj(); if (!me) return [];
+  const rows = side.notifs.rows.filter(n=>n.recipient===me.id).sort((a,b)=>((b.date||0)-(a.date||0)) || (b.id-a.id));
+  const items = [], open = {};
+  rows.forEach(n=>{
+    const type = typeKey(n.type), k = n.task+'|'+n.author;
+    const g0 = type==='modification' && n.task ? open[k] : null;
+    if (g0 && g0.oldest && n.date && (g0.oldest-n.date)<=GROUP_MS){   // regroupement sur 5 minutes
+      g0.ids.push(n.id); g0.oldest = n.date; g0.unread = g0.unread || !n.read; if (n.text && !g0.texts.includes(n.text)) g0.texts.push(n.text); return;
+    }
+    const it = {key:'n'+n.id, type, ids:[n.id], taskId:n.task, commentId:n.comment, author:n.author, texts:n.text?[n.text]:[], date:n.date, oldest:n.date, unread:!n.read};
+    items.push(it); if (type==='modification' && n.task) open[k] = it;
+  });
+  return [...dueItems(), ...items];
+}
+function relTime(d){
+  if (!d) return '';
+  const m = Math.round((Date.now()-d)/60000);
+  if (m<1) return "à l'instant"; if (m<60) return `il y a ${m} min`;
+  if (m<1440) return `il y a ${Math.round(m/60)} h`;
+  return fmtDateTime(d);
+}
+function notifTitle(it){
+  const c = it.taskId ? index.get(it.taskId) : null, t = c ? `« ${c.titre||'sans titre'} »` : 'une tâche', a = who(it.author) || "Quelqu'un";
+  switch (it.type){
+    case 'mention': return `${a} vous a mentionné(e) dans ${t}`;
+    case 'assignation': return `${a} vous a ajouté(e) comme responsable de ${t}`;
+    case 'reponse': return `${a} a répondu à votre commentaire dans ${t}`;
+    case 'commentaire': return `${a} a commenté ${t}`;
+    case 'echeance': return it.diff===0 ? `${t} arrive à échéance aujourd'hui` : `${t} arrive à échéance demain`;
+    case 'retard': return `${t} a dépassé son échéance`;
+    default: return it.taskId ? `${a} a modifié ${t}` : `${a} a modifié une tâche`;
+  }
+}
+const icon = ty => `<span class="ic" style="background:${NOTIF_TYPES[ty].bg};color:${NOTIF_TYPES[ty].fg}" aria-hidden="true">${NOTIF_TYPES[ty].icon}</span>`;
+function markRead(its){
+  const c = side.notifs.cols, ids = its.flatMap(i=>i.ids), due = its.filter(i=>i.due && i.unread).map(i=>i.key);
+  if (due.length){ notifSeen = [...notifSeen, ...due].slice(-400); if (docKey) lsSet('notifSeen:'+docKey, notifSeen); }
+  const un = side.notifs.rows.filter(n=>ids.includes(n.id) && !n.read); un.forEach(n=>{ n.read = true; });
+  if (un.length && c && c.read) grist.docApi.applyUserActions([['BulkUpdateRecord', TABLES.notifs.table, un.map(n=>n.id), {[c.read]: un.map(()=>true)}]]).catch(e=>flash('Notification non marquée comme lue : '+((e&&e.message)||e)));
+  renderNotifs();
+}
+function openNotif(it){
+  notifOpen = false; hideToast();
+  markRead([it]);
+  if (!it.taskId || !index.has(it.taskId)){ flash("Cette tâche n'existe plus ou ne vous est plus accessible."); return; }
+  ficheFocus = it.commentId ? {sel:'#cm-'+it.commentId} : it.type==='modification' ? {sel:'#fp-hist'} : null;
+  if (ficheFocus) ficheFocus.until = Date.now()+6000;
+  grist.setCursorPos({rowId:it.taskId}).catch(()=>{});
+  openFiche(it.taskId);
+}
+function applyFicheFocus(){
+  if (!ficheFocus) return;
+  if (Date.now()>ficheFocus.until){ ficheFocus = null; return; }
+  const el = $('fiche').querySelector(ficheFocus.sel); if (!el) return;
+  el.classList.add('hlflash');
+  if (!ficheFocus.scrolled){ ficheFocus.scrolled = true; el.scrollIntoView({block:'center'}); setTimeout(()=>{ const x = ficheFocus && $('fiche').querySelector(ficheFocus.sel); if (x) x.classList.remove('hlflash'); ficheFocus = null; }, 6000); }
+}
+function hideToast(){ clearTimeout(toastTimer); $('ntoast').style.display='none'; }
+function maybeToast(items){   // une nouvelle assignation est signalée sans attendre l'ouverture de la cloche
+  const it = items.find(i=>i.type==='assignation' && i.unread && !toastShown.has(i.key)); if (!it) return;
+  toastShown.add(it.key);
+  const el = $('ntoast'); el.style.display = 'flex';
+  el.innerHTML = `${icon('assignation')}<div class="tx"><b>Nouvelle assignation</b><br>${esc(notifTitle(it))}</div><button class="close" id="nt-x" aria-label="Fermer">×</button>`;
+  el.onclick = e=>{ if (e.target.closest('#nt-x')) hideToast(); else openNotif(it); };
+  clearTimeout(toastTimer); toastTimer = setTimeout(hideToast, 20000);
+}
+function renderNotifs(){
+  const bell = $('bell'), panel = $('notifs'); if (!bell) return;
+  const items = notifItems(), un = items.filter(i=>i.unread).length;
+  bell.className = notifOpen ? 'on' : '';
+  bell.title = un ? `${un} notification(s) non lue(s)` : 'Notifications';
+  bell.setAttribute('aria-label', bell.title); bell.setAttribute('aria-expanded', String(notifOpen));
+  bell.innerHTML = SVG('<path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/>') + (un ? `<span class="nb">${un>99?'99+':un}</span>` : '');
+  maybeToast(items);
+  if (!notifOpen){ panel.style.display='none'; return; }
+  panel.style.display = 'flex';
+  const me = meObj(), r = bell.getBoundingClientRect();
+  panel.style.top = (r.bottom+6)+'px';
+  const shown = (notifFilter==='unread' ? items.filter(i=>i.unread) : items).slice(0,60);
+  const fb = (id,lab,on)=>`<button class="fb ${on?'active':''}" id="${id}">${lab}</button>`;
+  const empty = side.notifs.ok===false
+    ? `Table « ${TABLES.notifs.table} » inutilisable : ${esc(side.notifs.note)}`
+    : !me ? 'Indiquez qui vous êtes pour voir vos notifications.' : notifFilter==='unread' ? 'Aucune notification non lue.' : 'Aucune notification.';
+  const list = panel.querySelector('.nlist'), keepTop = list ? list.scrollTop : 0;
+  panel.innerHTML = `<div class="nh"><b>Notifications</b><button class="lnkb" id="n-all">Tout marquer comme lu</button></div>
+    <div class="nf">${fb('n-f-all','Toutes',notifFilter==='all')}${fb('n-f-un',`Non lues (${un})`,notifFilter==='unread')}</div>
+    <div class="nlist">${shown.map((it,i)=>{ const T = NOTIF_TYPES[it.type]; return `<button class="ni${it.unread?' unread':''}${it.type==='assignation'&&it.unread?' assign':''}" data-ni="${i}">${icon(it.type)}<span class="bd">
+        <span class="k">${it.type==='assignation'?`<b>${T.label}</b>`:esc(T.label)}${it.date&&!it.due?' · '+esc(relTime(it.date)):''}${it.ids.length>1?` · ${it.ids.length} changements`:''}</span>
+        <span class="t">${esc(notifTitle(it))}</span>${it.texts.length?`<span class="d">${esc(it.texts.join(' · '))}</span>`:''}</span>${it.unread?'<span class="pt" title="Non lue"></span>':''}</button>`; }).join('') || `<div class="msg" style="padding:24px 14px;text-align:center">${empty}</div>`}</div>
+    <div class="nfoot">${side.notifs.ok===false?`<div style="color:#a3121d;margin-bottom:4px">Table « ${TABLES.notifs.table} » inutilisable : ${esc(side.notifs.note)}</div>`:''}${me?`Vous êtes <b>${esc(me.label)}</b>${me.email?'':' (sans courriel dans Equipe)'} · <button class="lnkb" id="n-me">Changer</button>`:`<button class="lnkb" id="n-me">Indiquer qui je suis</button>`}</div>`;
+  const nl = panel.querySelector('.nlist'); if (nl) nl.scrollTop = keepTop;
+  $('n-all').onclick = ()=>markRead(items);
+  $('n-f-all').onclick = ()=>{ notifFilter='all'; renderNotifs(); };
+  $('n-f-un').onclick = ()=>{ notifFilter='unread'; renderNotifs(); };
+  $('n-me').onclick = ()=>{ setMe(null); askedMe = false; askMe('Pour afficher vos notifications.'); renderNotifs(); };
+  panel.querySelectorAll('[data-ni]').forEach(b=>b.onclick=()=>openNotif(shown[+b.dataset.ni]));
 }
 
 /* ============ INTERACTIONS : cartes et colonnes ============ */
@@ -1469,6 +1747,7 @@ function wire(){
   document.querySelectorAll('[data-tosuivi]').forEach(b=>b.onclick=()=>{ const c = cardOf(b); if (c && canEnterSuivi(c)) update(c, {statut:STATUT_DEFAUT}); });
 }
 document.addEventListener('click', e=>{
+  if (notifOpen){ const pa = (e.composedPath && e.composedPath()) || []; if (!pa.some(n=>n && (n.id==='notifs' || n.id==='bell' || n.id==='pop'))){ notifOpen = false; renderNotifs(); } }
   if (!menu) return;
   // le menu est reconstruit pendant le clic : on regarde le chemin de l'événement, pas l'élément cliqué (déjà retiré de la page)
   const path = (e.composedPath && e.composedPath()) || [];
@@ -1477,15 +1756,18 @@ document.addEventListener('click', e=>{
 });
 document.addEventListener('keydown', e=>{
   if (e.key!=='Escape') return;
-  if (menu) closeMenu(); else if (manage) closeManage(); else if ($('pop').style.display==='block') closePop(); else closeFiche();
+  if (notifOpen){ notifOpen = false; renderNotifs(); } else if (menu) closeMenu(); else if (manage) closeManage(); else if ($('pop').style.display==='block') closePop(); else closeFiche();
 });
 
 /* ============ GRIST ============ */
 grist.ready({ columns: COLS, requiredAccess: 'full', allowSelectBy: true });
 grist.onOptions(o=>{
-  if (o && o.mode) mode = o.mode;
-  if (o && o.groups) grpBy = {...grpBy, ...o.groups};
-  else if (o && (o.group==='prio' || o.group==='statut')) grpBy.suivi = grpBy.perso = o.group;   // ancien réglage
+  // La vue active et le regroupement sont propres à chaque navigateur ; les anciens réglages partagés servent seulement de valeur de départ.
+  if (o && o.mode && lsGet('mode',null)==null) mode = o.mode;
+  if (lsGet('groups',null)==null){
+    if (o && o.groups) grpBy = {...grpBy, ...o.groups};
+    else if (o && (o.group==='prio' || o.group==='statut')) grpBy.suivi = grpBy.perso = o.group;
+  }
   if (o && o.colors) colors = {groups:o.colors.groups||{}, tags:o.colors.tags||{}};
   if (o && o.order) colOrder = o.order;
   if (o && o.orange != null) thr.orange = Number(o.orange);
@@ -1498,6 +1780,10 @@ grist.onRecords(async (recs, mappings)=>{
   map = mappings ? {...mappings} : null;
   if (map && map.responsables) map.personnes = '@Equipe';   // noms toujours déduits de la référence (la colonne texte éventuelle est ignorée)
   if (!host){ try { host = await grist.selectedTable.getTableId(); } catch(e){ host = null; } }
+  if (!docKey){
+    try { docKey = String(await grist.docApi.getDocName()); } catch(e){ docKey = 'doc'; }
+    moiId = lsGet('moiId:'+docKey, null); moi = lsGet('moi:'+docKey, lsGet('moi','')); notifSeen = lsGet('notifSeen:'+docKey, []);
+  }
   rawRecs = recs || []; rawFirst = rawRecs[0] || null;
   ingest();
   ensureMeta();
