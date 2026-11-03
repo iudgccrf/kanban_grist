@@ -207,7 +207,7 @@
 
 <script>
 /* ============ CONFIGURATION ============ */
-const VERSION = '2026-11-03 a';   // affichée dans le bandeau et le diagnostic : permet de vérifier que le bon fichier est chargé
+const VERSION = '2026-11-03 b';   // affichée dans le bandeau et le diagnostic : permet de vérifier que le bon fichier est chargé
 const STATUTS = ['A faire','En cours','Bloqué','A valider','Terminé','Abandonné','Archivé'];
 const PRIOS   = ['P0 Critique','P1 Important','P2 Souhaitable','P3 Appréciable','Nouveau','Relégué','Abandonné','Déjà prévu'];
 const CHARGES = ['XS','S','M','L','XL'];
@@ -305,16 +305,15 @@ const COLS = [
 /* ============ ÉTAT ============ */
 const $ = id => document.getElementById(id);
 let mode = lsGet('mode','suivi');   // suivi | backlog | perso | corbeille : propre à ce navigateur
-let docKey = '';               // identifiant du document : l'identité est mémorisée par document
-let moi = '';                  // nom de la personne qui utilise CE navigateur
-let moiId = null;              // sa ligne dans Equipe : survit à un renommage
+let docKey = '';               // identifiant du document
+let moi = '', moiId = null;    // identité donnée par le serveur Grist (colonne Est_moi de Equipe), jamais déclarée
+let idNote = '';               // pourquoi l'identité est inconnue
 let persoFor = '';             // Mes tâches : '' = moi, '*' = tout le monde, sinon nom d'une personne
 let notifOpen = false, notifFilter = 'all', notifSeen = [], toastShown = new Set(), toastTimer = null;
 let ficheFocus = null;         // élément à mettre en évidence dans la fiche : {sel, scrolled, until}
 let uploadNote = '';           // envoi de pièces jointes en cours
 let delcId = null;             // commentaire dont la suppression attend confirmation
 let grpBy = {suivi:'statut', perso:'statut', backlog:'prio', ...lsGet('groups',{})};   // regroupement des colonnes, par vue et propre à ce navigateur
-let askedMe = false, askResolve = null;   // question « Qui êtes-vous ? »
 let descEdit = null;          // carte dont la description est en cours de modification
 let delConfirm = null;        // carte dont la suppression attend confirmation
 let sortPref = lsGet('sort', []);   // critères de tri (propres à ce navigateur)
@@ -452,11 +451,8 @@ function checklistCount(t){ const {items} = parseChecklist(t); return {done: ite
 function lsGet(k, d){ try { const v = localStorage.getItem('kanban.'+k); return v==null ? d : JSON.parse(v); } catch(e){ return d; } }
 function lsSet(k, v){ try { localStorage.setItem('kanban.'+k, JSON.stringify(v)); } catch(e){} }
 const norm = s => String(s==null?'':s).normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase().trim();
-const meObj = () => team.find(t=>t.id===moiId) || team.find(t=>t.label===moi) || null;
-function setMe(p){ moiId = p ? p.id : null; moi = p ? p.label : ''; if (docKey){ lsSet('moiId:'+docKey, moiId); lsSet('moi:'+docKey, moi); } }
-function syncMe(){ const m = meObj(); if (m && (m.id!==moiId || m.label!==moi)) setMe(m); }
-// Le courriel posé par Grist sur une ligne que je viens d'écrire (formule d'initialisation user.Email) est la seule identité sûre : il remplace le nom choisi.
-function learnIdentity(email){ const n = norm(email); if (!n) return; const p = team.find(t=>norm(t.email)===n); if (p && p.id!==moiId){ setMe(p); render(); } }
+const meObj = () => team.find(t=>t.id===moiId) || null;
+const canSeeOthers = () => !!(meObj() && meObj().voit);   // affichage seulement : ce sont les règles d'accès qui protègent les données
 function personOf(row){ const n = norm(row.email), a = norm(row.author); return team.find(t=>n && norm(t.email)===n) || team.find(t=>a && (norm(t.label)===a || norm(t.label)===norm(who(row.author)))) || null; }
 function who(s){   // nom lisible : « prenom.nom », courriel ou nom → nom de la table Equipe quand on le retrouve
   s = String(s==null?'':s).trim(); if (!s) return '';
@@ -479,7 +475,7 @@ function valLabel(card, k, v){   // valeur lisible d'un champ (pour le journal)
 
 /* ============ MÉTADONNÉES DES COLONNES ============ */
 async function loadMeta(){
-  meta = {}; team = []; teamById = {}; teamCol = null; teamTable = null; metaNote = '';
+  meta = {}; team = []; teamById = {}; teamCol = null; teamTable = null; metaNote = ''; moiId = null; moi = ''; idNote = '';
   try {
     const T = await grist.docApi.fetchTable('_grist_Tables');
     const C = await grist.docApi.fetchTable('_grist_Tables_column');
@@ -500,7 +496,11 @@ async function loadMeta(){
       if (!lab || !(lab in E)) lab = ['Nom','nom','NOM','Name','name','Titre'].find(x=>x in E) || Object.keys(E).find(x=>!/^(id|manualSort|gristHelper_)/.test(x));
       teamCol = lab;
       const emCol = Object.keys(E).find(x=>/courriel|couriel|e_?mail|^mail/i.test(x));
-      (E.id||[]).forEach((id,i)=>{ const label = String(E[lab] ? E[lab][i] : '').trim(); if (label) { team.push({id, label, email: emCol ? String(E[emCol][i]||'').trim() : ''}); teamById[id] = label; } });
+      const meCol = Object.keys(E).find(x=>/^est_?moi$/.test(norm(x))), voitCol = Object.keys(E).find(x=>/^voit_?hors_?projet/.test(norm(x)));
+      (E.id||[]).forEach((id,i)=>{ const label = String(E[lab] ? E[lab][i] : '').trim(); if (label) { team.push({id, label, email: emCol ? String(E[emCol][i]||'').trim() : '', voit: !!(voitCol && E[voitCol][i]===true)}); teamById[id] = label;
+        if (meCol && E[meCol][i]===true && moiId===null){ moiId = id; moi = label; } } });   // la règle d'accès masque cette colonne sur toutes les lignes sauf la mienne
+      if (!meCol) idNote = `Pour reconnaître chaque personne, ajoutez à la table « ${teamTable} » la colonne formule Est_moi et sa règle d'accès (voir le guide).`;
+      else if (moiId===null) idNote = `Votre compte Grist n'est pas reconnu dans la table « ${teamTable} » : vérifiez que votre courriel de connexion y figure à l'identique, ou que la règle de la colonne Est_moi est en place.`;
       team.sort((a,b)=>a.label.localeCompare(b.label,'fr'));
       metaNote = `table « ${teamTable} » (colonne « ${lab} ») : ${team.length} personne(s)`;
     }
@@ -512,9 +512,7 @@ async function ensureMeta(force){
   if (!host || !map || (sig===metaSig && !force)) return;
   metaSig = sig;
   await loadMeta();
-  syncMe();
   ingest();
-  maybeAsk('Pour afficher vos notifications et vos tâches.');
 }
 async function reloadMeta(){ metaSig=''; await ensureMeta(true); }
 // valeurs proposées : choix déclarés dans la colonne Grist (sinon valeurs par défaut) + valeurs déjà utilisées
@@ -560,7 +558,6 @@ async function loadTable(kind, again){
     if (!c.task) throw new Error('colonne « Tache » (référence vers Taches) absente');
     if (kind==='comments' && !c.text) throw new Error('colonne « Texte » absente');
     S.cols = c;
-    if (S.fill.size && c.email) S.fill.forEach(rid=>{ const i = (t.id||[]).indexOf(rid); if (i>=0 && t[c.email][i]) learnIdentity(t[c.email][i]); });
     if (S.fill.size && !again){
       const ups = fillBlanks(kind, t, c); S.fill.clear();
       if (ups.length){ await grist.docApi.applyUserActions(ups); return loadTable(kind, true); }
@@ -586,7 +583,6 @@ const historyOf = id => side.history.rows.filter(h=>h.task===id);
 function commentCount(r){ return side.comments.ok ? commentsOf(r.id).length : (Number(g(r,'commentaires'))||0); }
 async function addComment(taskId, parentId, text){
   text = String(text||'').trim(); if (!text) return false;
-  await maybeAsk('Pour signer votre commentaire.');
   const c = side.comments.cols; if (!c){ flash('Table « '+TABLES.comments.table+' » inutilisable : '+side.comments.note); return false; }
   const f = {[c.task]: taskId, [c.text]: text};
   if (parentId && c.parent) f[c.parent] = parentId;
@@ -710,6 +706,11 @@ function setField(card, key, v){   // choisit (ou décoche) une valeur
   }
   const cur = L(card,key), has = cur.includes(v);
   if (key==='statut' && has) return;
+  if (key==='espace' && !has && norm(v)===norm(ESP_HP) && map.responsables && !refIds(card.responsables).length){
+    // Sans responsable, une tâche hors projet ne serait visible de personne : elle revient à son créateur (à défaut, à la personne qui la déplace).
+    const n = who(g(card,'creePar')), p = team.find(t=>t.label===n) || meObj();
+    if (p){ const list = isListRef(); return update(card, {espace:v, responsables: list?[p.id]:p.id}, {responsables: list?['L',p.id]:p.id}); }
+  }
   if (isMulti(key)){ const next = has ? cur.filter(x=>x!==v) : [...cur, v]; return update(card, {[key]: next}, {[key]: ['L',...next]}); }
   return update(card, {[key]: has ? null : v});
 }
@@ -721,8 +722,8 @@ const hasVoted = r => { const m = meObj(); return !!(map.votants && m && refIds(
 async function castVote(card){
   if (!card) return;
   if (map.votants){
-    const m = meObj() || await askMe("Pour voter : un vote par personne.");
-    if (!m) return;
+    const m = meObj();
+    if (!m){ flash(idNote || 'Votre compte Grist n\'est pas reconnu.'); return; }
     const c = index.get(card.id) || card;
     const cur = refIds(c.votants), ids = cur.includes(m.id) ? cur.filter(x=>x!==m.id) : [...cur, m.id];
     return update(c, {votants: ids}, {votants: ['L', ...ids]});
@@ -774,31 +775,9 @@ async function deleteTask(card){
   loadTable('comments');
   return true;
 }
-/* --- identité (déclarée) : demandée seulement quand elle sert --- */
-let askPromise = null;
-function askMe(reason){
-  if (meObj() || !team.length) return Promise.resolve(meObj());
-  if (askPromise) return askPromise;                    // une seule question à la fois : tous les appelants attendent la même réponse
-  askPromise = new Promise(res=>{
-    askResolve = ()=>{ askPromise = null; res(meObj()); };
-    const p = $('pop'); p.style.display = 'block';
-    p.innerHTML = `<b>Qui êtes-vous ?</b><div class="hint">${esc(reason)} Votre choix est mémorisé dans ce navigateur, puis confirmé par votre compte Grist dès votre premier commentaire.</div>
-      <div class="row"><select id="qm"><option value="">— choisir —</option>${team.map(t=>`<option>${esc(t.label)}</option>`).join('')}</select></div>
-      <div class="row" style="justify-content:flex-end"><button id="qm-skip">Plus tard</button><button class="primary" id="qm-ok">Valider</button></div>`;
-    const done = v=>{ if (v){ const pp = team.find(t=>t.label===v); if (pp) setMe(pp); } closePop(); render(); };
-    $('qm-ok').onclick = ()=>done($('qm').value); $('qm-skip').onclick = ()=>done('');
-  });
-  return askPromise;
-}
-async function maybeAsk(reason){ if (!meObj() && !askedMe && team.length) await askMe(reason); }
 async function afterHistoryWrite(ids){   // complète la date tout de suite, puis la signature une fois l'identité connue
   ids = ids.filter(i=>typeof i==='number'); if (!ids.length) return;
-  const had = !!meObj();
   ids.forEach(i=>side.history.fill.add(i)); await loadTable('history');
-  if (!had){
-    await maybeAsk("Pour signer l'historique des modifications.");
-    if (meObj()){ ids.forEach(i=>side.history.fill.add(i)); await loadTable('history'); }
-  }
 }
 
 /* --- création de nouvelles valeurs --- */
@@ -842,9 +821,13 @@ function renderMenu(){
   const b = menu.build();
   el.innerHTML = b.html; el.style.display = 'block';
   const r = a.getBoundingClientRect();
+  el.style.maxHeight = 'none';
   const w = el.offsetWidth, h = el.offsetHeight;
   el.style.left = Math.max(6, Math.min(r.left, window.innerWidth - w - 8))+'px';
-  el.style.top  = (r.bottom + h + 12 > window.innerHeight && r.top > h + 12 ? Math.max(6, r.top - h - 4) : r.bottom + 4)+'px';
+  const below = window.innerHeight - r.bottom - 12, above = r.top - 12;   // le menu défile dans la place disponible, sans déborder du widget
+  if (h <= below){ el.style.maxHeight = ''; el.style.top = (r.bottom+4)+'px'; }
+  else if (above > below){ const mh = Math.min(h, above); el.style.maxHeight = mh+'px'; el.style.top = Math.max(6, r.top-mh-4)+'px'; }
+  else { el.style.maxHeight = Math.max(120, below)+'px'; el.style.top = (r.bottom+4)+'px'; }
   b.bind(el);
 }
 function fieldPicker(cardId){
@@ -1074,7 +1057,10 @@ function inView(r){
 }
 function passes(r){
   if (!inView(r)) return false;
-  if (mode==='perso'){ const target = persoFor==='*' ? '' : (persoFor || moi); if (target && !L(r,'personnes').includes(target)) return false; }
+  if (mode==='perso'){
+    const target = canSeeOthers() && persoFor ? persoFor : moi;
+    if (!(canSeeOthers() && persoFor==='*') && !(target && L(r,'personnes').includes(target))) return false;
+  }
   for (const f of FILTERS){
     if (f.skipIn===mode) continue;
     const sel = F[f.id]; if (!sel.length) continue;
@@ -1104,7 +1090,7 @@ function renderHeader(){
   if (map){
     const gks = groupChoices();
     if (gks.length>1) r1 += `<label>Grouper par <select id="f-grp">${gks.map(k=>`<option value="${k}" ${groupKey()===k?'selected':''}>${GROUP_LABELS[k]}</option>`).join('')}</select></label>`;
-    if (mode==='perso'){
+    if (mode==='perso' && canSeeOthers()){
       const names = team.length ? team.map(t=>t.label) : [...new Set(records.flatMap(r=>L(r,'personnes')))].sort((a,b)=>a.localeCompare(b,'fr'));
       r1 += `<label title="Par défaut, vos tâches. Vous ne voyez que les tâches hors projet auxquelles vous avez accès.">Tâches de <select id="f-for"><option value="" ${!persoFor?'selected':''}>Moi${moi?' ('+esc(moi)+')':''}</option><option value="*" ${persoFor==='*'?'selected':''}>Tout le monde</option>${names.filter(n=>n!==moi).map(n=>`<option ${n===persoFor?'selected':''}>${esc(n)}</option>`).join('')}</select></label>`;
     }
@@ -1124,10 +1110,10 @@ function renderHeader(){
   r2 += `<button id="reset">Réinitialiser</button><span class="spacer"></span><button id="bell" aria-haspopup="true"></button><button id="mgBtn" title="Ajouter, renommer, supprimer des valeurs">✎ Valeurs</button><button id="diagBtn" title="Diagnostic">🔧 Diagnostic</button><button id="colorsBtn">🎨 Couleurs</button>`;
   $('hdr').innerHTML = `<div class="hrow">${r1}</div><div class="hrow">${r2}</div>`;
 
-  $('mode').onchange = e=>{ mode=e.target.value; lsSet('mode',mode); closeMenu(); render(); if (mode==='perso') maybeAsk('Pour afficher vos tâches.'); };
+  $('mode').onchange = e=>{ mode=e.target.value; lsSet('mode',mode); closeMenu(); render(); };
   const mo = $('f-for'); if (mo) mo.onchange = ()=>{ persoFor = mo.value; render(); };
   const gp = $('f-grp'); if (gp) gp.onchange = ()=>{ grpBy[mode] = gp.value; lsSet('groups', grpBy); render(); };
-  $('bell').onclick = ()=>{ notifOpen = !notifOpen; if (notifOpen && !meObj()) maybeAsk('Pour afficher vos notifications.'); renderNotifs(); };
+  $('bell').onclick = ()=>{ notifOpen = !notifOpen; renderNotifs(); };
   const sb = $('sortBtn'); if (sb) sb.onclick = ()=>openMenu('sort', sortMenu());
   document.querySelectorAll('[data-fbtn]').forEach(b=>b.onclick=()=>{ const f = FILTERS.find(x=>x.id===b.dataset.fbtn); openMenu('f-'+f.id, filterMenu(f)); });
   const ff = $('f-from'); if (ff) ff.onchange = ()=>{ F.from=ff.value; render(); };
@@ -1140,6 +1126,7 @@ function renderHeader(){
 }
 function renderWarn(){
   const parts = [];
+  if (map && idNote) parts.push(`<div class="warn"><b>⚠</b> ${esc(idNote)}</div>`);
   if (map && !map.espace) parts.push(`<div class="warn"><b>⚠</b> Associez la colonne <b>Espace</b> dans la configuration du widget : sans elle, les tâches hors projet apparaissent dans le Suivi et le Backlog.</div>`);
   if (map){
     const total = records.length, shown = records.filter(passes).length, inv = records.filter(inView).length;
@@ -1183,7 +1170,7 @@ function renderDiag(){
     'Commentaires : '+(side.comments.ok===null?'non chargés':side.comments.ok?side.comments.note+' | colonnes '+JSON.stringify(side.comments.cols):'indisponibles – '+side.comments.note),
     'Historique : '+(side.history.ok===null?'non chargé':side.history.ok?side.history.note+' | colonnes '+JSON.stringify(side.history.cols):'indisponible – '+side.history.note),
     'Notifications : '+(side.notifs.ok===null?'non chargées':side.notifs.ok?side.notifs.note+' | colonnes '+JSON.stringify(side.notifs.cols):'indisponibles – '+side.notifs.note),
-    'Moi (ce navigateur) : '+(moi||'(non choisi)')+' | ligne Equipe '+moiId+' | courriel '+((meObj()||{}).email||'?')+' | hors projet visibles : '+records.filter(isHP).length+' | tri : '+JSON.stringify(sortPref.filter(s=>s&&s.k)),
+    'Moi (selon Grist) : '+(moi||'inconnu')+' | ligne Equipe '+moiId+' | courriel '+((meObj()||{}).email||'?')+' | voit hors projet : '+canSeeOthers()+(idNote?' | '+idNote:'')+' | hors projet visibles : '+records.filter(isHP).length+' | tri : '+JSON.stringify(sortPref.filter(s=>s&&s.k)),
     'Cartes affichables dans cette vue : '+(map?records.filter(passes).length:'?'),
     'Première ligne brute : '+(rawFirst?JSON.stringify(rawFirst):'(aucune)').slice(0,400),
     'Première ligne convertie : '+first.slice(0,400),
@@ -1282,7 +1269,7 @@ function renderPanel(){
 }
 
 /* ============ NOUVELLE CARTE ============ */
-function closePop(){ $('pop').style.display='none'; if (askResolve){ const f = askResolve; askResolve = null; askedMe = true; f(); } }
+function closePop(){ $('pop').style.display='none'; }
 function openNewPop(group){
   const p = $('pop'); p.style.display='block';
   p.innerHTML = `<b>Nouvelle carte</b> <span class="hint">(${esc(group)})</span>
@@ -1296,8 +1283,8 @@ function openNewPop(group){
     const gk = groupKey();
     let me = null;
     if (perso){
-      me = meObj() || await askMe('Pour créer une tâche à votre nom.');
-      if (!me || !map.responsables || !map.espace){ flash('Création impossible : indiquez qui vous êtes et associez les colonnes Responsables et Espace.'); return; }
+      me = meObj();
+      if (!me || !map.responsables || !map.espace){ flash(idNote || 'Création impossible : associez les colonnes Responsables et Espace.'); return; }
     }
     const f = {[map.titre]: t, [map[gk]]: group};                       // la colonne cliquée donne la valeur (Statut, Prio ou Charge)
     if (mode!=='backlog' && gk!=='statut' && map.statut) f[map.statut] = STATUT_DEFAUT;   // sinon la carte partirait au Backlog
@@ -1402,7 +1389,7 @@ function commentsHtml(r){
   return `${top.map(one).join('') || '<div class="none">Aucun commentaire.</div>'}
     <div style="margin-top:12px"><textarea class="cmt" data-draft="new" placeholder="Écrire un commentaire… (@ pour citer quelqu'un)">${esc(drafts['new']||'')}</textarea>
       <div class="row"><button class="btn ghost" data-at="new" data-anchor="at-new">@ Citer</button><span class="grow"></span><button class="btn" id="cm-send">Publier</button></div>
-      ${meObj()?'':'<div class="none">Indiquez qui vous êtes depuis la cloche 🔔 : vos notifications en dépendent.</div>'}</div>`;
+      </div>`;
 }
 function atMenu(draftKey){
   return ()=>({ html: '<div class="mh">Citer une personne</div>' + (team.map(t=>`<div class="mi" data-at-p="${esc(t.label)}">@${esc(t.label)}</div>`).join('') || '<div class="mh" style="text-transform:none">Liste des personnes indisponible</div>'),
@@ -1694,19 +1681,18 @@ function renderNotifs(){
   const fb = (id,lab,on)=>`<button class="fb ${on?'active':''}" id="${id}">${lab}</button>`;
   const empty = side.notifs.ok===false
     ? `Table « ${TABLES.notifs.table} » inutilisable : ${esc(side.notifs.note)}`
-    : !me ? 'Indiquez qui vous êtes pour voir vos notifications.' : notifFilter==='unread' ? 'Aucune notification non lue.' : 'Aucune notification.';
+    : !me ? esc(idNote || "Votre compte Grist n'est pas reconnu.") : notifFilter==='unread' ? 'Aucune notification non lue.' : 'Aucune notification.';
   const list = panel.querySelector('.nlist'), keepTop = list ? list.scrollTop : 0;
   panel.innerHTML = `<div class="nh"><b>Notifications</b><button class="lnkb" id="n-all">Tout marquer comme lu</button></div>
     <div class="nf">${fb('n-f-all','Toutes',notifFilter==='all')}${fb('n-f-un',`Non lues (${un})`,notifFilter==='unread')}</div>
     <div class="nlist">${shown.map((it,i)=>{ const T = NOTIF_TYPES[it.type]; return `<button class="ni${it.unread?' unread':''}${it.type==='assignation'&&it.unread?' assign':''}" data-ni="${i}">${icon(it.type)}<span class="bd">
         <span class="k">${it.type==='assignation'?`<b>${T.label}</b>`:esc(T.label)}${it.date&&!it.due?' · '+esc(relTime(it.date)):''}${it.ids.length>1?` · ${it.ids.length} changements`:''}</span>
         <span class="t">${esc(notifTitle(it))}</span>${it.texts.length?`<span class="d">${esc(it.texts.join(' · '))}</span>`:''}</span>${it.unread?'<span class="pt" title="Non lue"></span>':''}</button>`; }).join('') || `<div class="msg" style="padding:24px 14px;text-align:center">${empty}</div>`}</div>
-    <div class="nfoot">${side.notifs.ok===false?`<div style="color:#a3121d;margin-bottom:4px">Table « ${TABLES.notifs.table} » inutilisable : ${esc(side.notifs.note)}</div>`:''}${me?`Vous êtes <b>${esc(me.label)}</b>${me.email?'':' (sans courriel dans Equipe)'} · <button class="lnkb" id="n-me">Changer</button>`:`<button class="lnkb" id="n-me">Indiquer qui je suis</button>`}</div>`;
+    <div class="nfoot">${side.notifs.ok===false?`<div style="color:#a3121d;margin-bottom:4px">Table « ${TABLES.notifs.table} » inutilisable : ${esc(side.notifs.note)}</div>`:''}${me?`Vous êtes <b>${esc(me.label)}</b>`:'Compte non reconnu'}</div>`;
   const nl = panel.querySelector('.nlist'); if (nl) nl.scrollTop = keepTop;
   $('n-all').onclick = ()=>markRead(items);
   $('n-f-all').onclick = ()=>{ notifFilter='all'; renderNotifs(); };
   $('n-f-un').onclick = ()=>{ notifFilter='unread'; renderNotifs(); };
-  $('n-me').onclick = ()=>{ setMe(null); askedMe = false; askMe('Pour afficher vos notifications.'); renderNotifs(); };
   panel.querySelectorAll('[data-ni]').forEach(b=>b.onclick=()=>openNotif(shown[+b.dataset.ni]));
 }
 
@@ -1748,7 +1734,11 @@ function wire(){
 }
 document.addEventListener('click', e=>{
   if (notifOpen){ const pa = (e.composedPath && e.composedPath()) || []; if (!pa.some(n=>n && (n.id==='notifs' || n.id==='bell' || n.id==='pop'))){ notifOpen = false; renderNotifs(); } }
-  if (!menu) return;
+  if (!menu){
+    const pa = (e.composedPath && e.composedPath()) || [];
+    if (openId!==null && !pa.some(n=>n && n.classList && (n.classList.contains('card') || ['fiche','menu','modal','pop','notifs','bell','ntoast'].includes(n.id)))) closeFiche();
+    return;
+  }
   // le menu est reconstruit pendant le clic : on regarde le chemin de l'événement, pas l'élément cliqué (déjà retiré de la page)
   const path = (e.composedPath && e.composedPath()) || [];
   const inside = path.some(n=>n && (n.id==='menu' || (n.dataset && n.dataset.anchor)));
@@ -1782,7 +1772,7 @@ grist.onRecords(async (recs, mappings)=>{
   if (!host){ try { host = await grist.selectedTable.getTableId(); } catch(e){ host = null; } }
   if (!docKey){
     try { docKey = String(await grist.docApi.getDocName()); } catch(e){ docKey = 'doc'; }
-    moiId = lsGet('moiId:'+docKey, null); moi = lsGet('moi:'+docKey, lsGet('moi','')); notifSeen = lsGet('notifSeen:'+docKey, []);
+    notifSeen = lsGet('notifSeen:'+docKey, []);
   }
   rawRecs = recs || []; rawFirst = rawRecs[0] || null;
   ingest();
