@@ -216,13 +216,13 @@
   /* fiche : cases de propriétés */
   .espill { flex:none; border:2px solid #4b2e83; border-radius:14px; padding:4px 11px; background:#fff; color:#4b2e83; font:inherit; font-size:12px; font-weight:700; cursor:pointer; white-space:nowrap; }
   .espill.hp { background:#4b2e83; color:#fff; }
-  #fiche { background:#eef0f4; }
-  #fiche .fhead { background:var(--accent-bg); border-bottom:0; }
-  #fiche .ftitle { color:#1f2a6b; }
+  #fiche { background:#e9ebf1; }
+  #fiche .fhead { background:#fff; border-bottom:1px solid #dcdfe8; }
+  #fiche .ftitle { color:#161616; }
   #fiche textarea.ftitle { display:block; font-size:18px; font-weight:800; line-height:1.25; resize:none; overflow:hidden; }
-  .ftop { background:var(--accent-bg); padding:0 18px 14px; }
-  #fiche .fmeta { padding:0 8px 2px; margin:-4px 0 0; color:#3f4770; }
-  #fiche .fbody { padding:12px 12px 30px; }
+  .ftop { background:#fff; border:1px solid #dcdfe8; border-radius:8px; margin:12px 12px 0; }
+  #fiche .fmeta { padding:0 0 8px; margin:0; color:#595959; }
+  #fiche .fbody { padding:10px 12px 30px; }
   #fiche .sec { margin:0 0 10px; padding:12px; background:#fff; border:1px solid #dcdfe8; border-radius:8px; }
   #fiche .sh { color:#1f2a6b; }
   .pc .pl { color:#3f4770; }
@@ -232,16 +232,17 @@
   .pc .pln { min-width:0; overflow:hidden; text-overflow:ellipsis; }
   .pc .chev { margin-left:auto; color:#2b3a9a; }
   .pc .pv { margin-top:5px; }
-  .ftop { padding:0 12px 12px; display:flow-root; }
+  .ftop { padding:12px; display:flow-root; }
+  .ftop > .pgrid:first-child { margin-top:0; }
   #fiche .fhead { padding:10px 12px; }
   .pgrid { display:grid; gap:6px; margin:8px 0 0; }
-  .pb { display:flex; align-items:center; gap:3px; min-width:0; padding:5px 6px; border:1px solid #c9d0ea; border-radius:6px; background:#fff; color:#2b3a9a; font:inherit; font-size:12px; font-weight:600; cursor:pointer; white-space:nowrap; }
-  .pb:hover, .pb:focus-visible { border-color:var(--accent); background:#f4f6ff; }
+  .pb { display:flex; align-items:center; gap:3px; min-width:0; padding:5px 6px; border:1px solid #c9d0ea; border-radius:6px; background:#f4f6ff; color:#2b3a9a; font:inherit; font-size:12px; font-weight:600; cursor:pointer; white-space:nowrap; }
+  .pb:hover, .pb:focus-visible { border-color:var(--accent); background:var(--accent-bg); }
   .pb svg { flex:none; }
   .pb .pln { min-width:0; overflow:hidden; text-overflow:ellipsis; }
   .pb .chev { margin-left:auto; }
   .psum { display:flex; flex-wrap:wrap; gap:6px 16px; margin-top:10px; }
-  .psum .sg .lbl { color:#3f4770; }
+  .psum .sg .lbl { color:#595959; }
   .avs { display:flex; border:0; background:none; padding:0 0 0 6px; cursor:pointer; }
   .avs:hover .av, .avs:focus-visible .av { box-shadow:0 0 0 2px var(--accent); }
   .avs .av { width:24px; height:24px; }
@@ -272,7 +273,7 @@
 
 <script>
 /* ============ CONFIGURATION ============ */
-const VERSION = '2026-11-03 k';   // affichée dans le bandeau et le diagnostic : permet de vérifier que le bon fichier est chargé
+const VERSION = '2026-11-03 l';   // affichée dans le bandeau et le diagnostic : permet de vérifier que le bon fichier est chargé
 const STATUTS = ['A faire','En cours','Bloqué','A valider','Terminé','Abandonné','Archivé'];
 const PRIOS   = ['P0 Critique','P1 Important','P2 Souhaitable','P3 Appréciable','Nouveau','Relégué','Abandonné','Déjà prévu'];
 const CHARGES = ['XS','S','M','L','XL'];
@@ -1335,7 +1336,8 @@ function cardHtml(r){
   if (cl.total) m += `<span>☑ ${cl.done}/${cl.total}</span>`;
   const pj = refIds(g(r,'pj')).length; if (pj) m += `<span>📎${pj}</span>`;
   const cc = commentCount(r); if (cc) m += `<span>🗨️${cc}</span>`;
-  if (mode==='backlog' && (map.votes||map.votants)) m += `<button class="vote ${hasVoted(r)?'on':''}" data-vote="1" title="${map.votants?(hasVoted(r)?'Retirer mon vote':'Voter (un vote par personne)'):'Voter'}">👍 ${voteCount(r)}</button>`;
+  if (mode==='corbeille' && !isHP(r) && (map.votes||map.votants) && voteCount(r)) m += `<span title="Votes">👍 ${voteCount(r)}</span>`;
+  if ((mode==='backlog' || mode==='suivi') && (map.votes||map.votants)) m += `<button class="vote ${hasVoted(r)?'on':''}" data-vote="1" title="${map.votants?(hasVoted(r)?'Retirer mon vote':'Voter (un vote par personne)'):'Voter'}">👍 ${voteCount(r)}</button>`;
   if (mode==='backlog' && canEnterSuivi(r)) m += `<button class="tosuivi" data-tosuivi="1" title="Envoyer dans le Suivi, colonne « ${STATUT_DEFAUT} »">➜ Suivi</button>`;
   if (mode==='corbeille') m += `<button class="tosuivi" data-restore="1" title="Remettre la tâche dans le Kanban">↩ Restaurer</button>`;
   const names = L(r,'personnes');
@@ -1553,7 +1555,7 @@ function renderFiche(){
     ? {sel: ae.id ? '#'+ae.id : '[data-draft="'+ae.dataset.draft+'"]', v: ae.value, s: ae.selectionStart, e: ae.selectionEnd} : null;
   const id = r.id, cur = ()=>index.get(id);             // toujours la version la plus récente de la carte
 
-  const vote = ((map.votes||map.votants) && !isHP(r)) ? `<button class="dd vote2 ${hasVoted(r)?'on':''}" id="fp-vote" title="${map.votants?(hasVoted(r)?'Retirer mon vote':'Voter (un vote par personne)'):'Voter'}">👍 ${voteCount(r)}</button>` : '';
+  const vote = ((map.votes||map.votants) && !isHP(r) && isDel(r)) ? `<span class="dd vote2" style="cursor:default" title="Votes conservés">👍 ${voteCount(r)}</span>` : ((map.votes||map.votants) && !isHP(r)) ? `<button class="dd vote2 ${hasVoted(r)?'on':''}" id="fp-vote" title="${map.votants?(hasVoted(r)?'Retirer mon vote':'Voter (un vote par personne)'):'Voter'}">👍 ${voteCount(r)}</button>` : '';
   const fm = [], cp = g(r,'creePar'), cl = toDate(g(r,'creeLe')), mp = g(r,'modifPar'), ml = toDate(g(r,'modifLe'));
   if (cp || cl) fm.push('Créée'+(cl?' le '+esc(fmtDateTime(cl)):'')+(cp?' par '+esc(who(cp)):''));
   if (mp || ml) fm.push('Modifiée'+(ml?' le '+esc(fmtDateTime(ml)):'')+(mp?' par '+esc(who(mp)):''));
