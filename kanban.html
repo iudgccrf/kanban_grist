@@ -187,10 +187,28 @@
   .ni .d { display:block; font-size:12px; color:#595959; margin-top:3px; overflow-wrap:anywhere; }
   .ni .pt { flex:none; align-self:center; width:9px; height:9px; border-radius:50%; background:var(--accent); }
   #notifs .nfoot { padding:7px 14px; border-top:1px solid #eee; font-size:12px; color:#595959; }
-  #ntoast { display:none; position:fixed; z-index:35; top:10px; right:10px; width:min(380px,calc(100vw - 20px)); align-items:center; gap:10px; padding:10px 12px; background:#fff1e3; border:2px solid #c2410c; border-radius:8px; box-shadow:0 8px 28px rgba(0,0,0,.3); cursor:pointer; }
+  #ntoast { display:none; position:fixed; z-index:35; bottom:14px; right:10px; width:min(380px,calc(100vw - 20px)); align-items:center; gap:10px; padding:10px 12px; background:#fff1e3; border:2px solid #c2410c; border-radius:8px; box-shadow:0 8px 28px rgba(0,0,0,.3); cursor:pointer; }
   #ntoast .tx { flex:1; min-width:0; line-height:1.35; overflow-wrap:anywhere; }
   .hlflash { background:#fff3c4 !important; outline:2px solid #d9a400; border-radius:6px; }
-  .tag.hp { background:#ece7f6; color:#4b2e83; }
+  .hpill { border:0; border-radius:3px; background:#4b2e83; color:#fff; font:inherit; font-size:11px; font-weight:700; padding:2px 6px; cursor:pointer; white-space:nowrap; }
+  .avatars { border:0; background:none; padding:0 0 0 6px; cursor:pointer; font:inherit; }
+  .avatars:hover .av, .avatars:focus-visible .av { box-shadow:0 0 0 2px var(--accent); }
+  .av.none { background:#fff; color:#555; border:1px dashed #889; font-size:14px; margin-left:0; }
+  /* fiche : cases de propriétés */
+  .espill { flex:none; border:2px solid #4b2e83; border-radius:14px; padding:4px 11px; background:#fff; color:#4b2e83; font:inherit; font-size:12px; font-weight:700; cursor:pointer; white-space:nowrap; }
+  .espill.hp { background:#4b2e83; color:#fff; }
+  .pgrid { display:grid; gap:8px; margin:10px 0 0; }
+  .pc { min-width:0; padding:7px 8px; border:1px solid #dfe3f2; border-radius:6px; background:#fff; cursor:pointer; }
+  .pc:hover, .pc:focus-visible { border-color:var(--accent); background:#f7f8fe; }
+  .pc .pl { display:flex; align-items:center; gap:4px; font-size:11px; font-weight:600; color:#595959; margin-bottom:5px; }
+  .pc .pv { display:flex; flex-wrap:wrap; gap:4px; align-items:center; min-height:20px; }
+  .pc .tag { white-space:normal; overflow-wrap:anywhere; font-size:12px; }
+  .pc .nm { display:inline-block; background:var(--accent-bg); border-radius:4px; padding:2px 6px; font-size:12px; overflow-wrap:anywhere; }
+  .pc .nm .x { margin-left:3px; opacity:.5; cursor:pointer; }
+  .pc .addv { font-size:12px; font-weight:600; color:#2b3a9a; }
+  .prow3 { display:flex; gap:8px; align-items:stretch; margin-top:8px; }
+  .prow3 .pc { flex:1; }
+  .prow3 .dd.vote2 { margin-left:0; }
 </style>
 </head>
 <body>
@@ -207,7 +225,7 @@
 
 <script>
 /* ============ CONFIGURATION ============ */
-const VERSION = '2026-11-03 b';   // affichée dans le bandeau et le diagnostic : permet de vérifier que le bon fichier est chargé
+const VERSION = '2026-11-03 c';   // affichée dans le bandeau et le diagnostic : permet de vérifier que le bon fichier est chargé
 const STATUTS = ['A faire','En cours','Bloqué','A valider','Terminé','Abandonné','Archivé'];
 const PRIOS   = ['P0 Critique','P1 Important','P2 Souhaitable','P3 Appréciable','Nouveau','Relégué','Abandonné','Déjà prévu'];
 const CHARGES = ['XS','S','M','L','XL'];
@@ -245,7 +263,7 @@ const NOTIF_TYPES = {
 const SIDE_POLL_MS = 15000;
 const HIST_KEYS = {espace:'Espace', statut:'Statut', prio:'Prio', charge:'Charge', echeance:'Échéance', responsables:'Responsables'};   // champs dont les changements sont journalisés
 const NOTIF_SKIP = ['votes','votants','commentaires','creePar','creeLe','modifPar','modifLe','supprimee','personnes'];   // champs qui ne déclenchent pas de notification
-const CARD_KEYS = ['statut','prio','charge'];       // champs modifiables avec le bouton ＋ des cartes
+const CARD_KEYS = ['statut','prio','charge','responsables','espace'];       // champs modifiables avec le bouton ＋ des cartes
 const STATUT_DEFAUT = 'A faire';
 
 // Champs modifiables depuis la carte et la fiche
@@ -496,10 +514,13 @@ async function loadMeta(){
       if (!lab || !(lab in E)) lab = ['Nom','nom','NOM','Name','name','Titre'].find(x=>x in E) || Object.keys(E).find(x=>!/^(id|manualSort|gristHelper_)/.test(x));
       teamCol = lab;
       const emCol = Object.keys(E).find(x=>/courriel|couriel|e_?mail|^mail/i.test(x));
+      const mine = [];
       const meCol = Object.keys(E).find(x=>/^est_?moi$/.test(norm(x))), voitCol = Object.keys(E).find(x=>/^voit_?hors_?projet/.test(norm(x)));
       (E.id||[]).forEach((id,i)=>{ const label = String(E[lab] ? E[lab][i] : '').trim(); if (label) { team.push({id, label, email: emCol ? String(E[emCol][i]||'').trim() : '', voit: !!(voitCol && E[voitCol][i]===true)}); teamById[id] = label;
-        if (meCol && E[meCol][i]===true && moiId===null){ moiId = id; moi = label; } } });   // la règle d'accès masque cette colonne sur toutes les lignes sauf la mienne
-      if (!meCol) idNote = `Pour reconnaître chaque personne, ajoutez à la table « ${teamTable} » la colonne formule Est_moi et sa règle d'accès (voir le guide).`;
+        if (meCol && E[meCol][i]===true) mine.push({id, label}); } });   // la règle d'accès masque cette colonne sur toutes les lignes sauf la mienne
+      if (mine.length===1){ moiId = mine[0].id; moi = mine[0].label; }
+      if (mine.length>1) idNote = `La colonne Est_moi est lisible sur ${mine.length} lignes : sa règle ne doit comporter aucune exception, même pour les propriétaires. Les autres colonnes de « ${teamTable} » restent modifiables.`;
+      else if (!meCol) idNote = `Pour reconnaître chaque personne, ajoutez à la table « ${teamTable} » la colonne formule Est_moi et sa règle d'accès (voir le guide).`;
       else if (moiId===null) idNote = `Votre compte Grist n'est pas reconnu dans la table « ${teamTable} » : vérifiez que votre courriel de connexion y figure à l'identique, ou que la règle de la colonne Est_moi est en place.`;
       team.sort((a,b)=>a.label.localeCompare(b.label,'fr'));
       metaNote = `table « ${teamTable} » (colonne « ${lab} ») : ${team.length} personne(s)`;
@@ -1200,11 +1221,11 @@ function dateBadge(r){
 }
 function cardHtml(r){
   let tags = '';
-  if (isHP(r)) tags += `<span class="tag hp">${esc(ESP_HP)}</span>`;
+  if (isHP(r)) tags += `<button class="hpill" data-cesp="1" data-anchor="ce-${r.id}" title="Changer l'espace">${esc(ESP_HP)} ▾</button>`;
   if (mode!=='backlog' && g(r,'prio')) tags += tagX(g(r,'prio'),'prio');
   if (g(r,'charge')) tags += tagX(g(r,'charge'),'charge');
   ['etiquettes','personas','produit','themes','sources'].forEach(k=>L(r,k).forEach(t=>tags+=tagX(t,k)));
-  if (mode!=='corbeille') tags += `<button class="cplus" data-cplus="1" data-anchor="cp-${r.id}" title="Modifier le statut, la prio ou la charge">＋</button>`;
+  if (mode!=='corbeille') tags += `<button class="cplus" data-cplus="1" data-anchor="cp-${r.id}" title="Modifier le statut, la prio, la charge, le responsable ou l'espace">＋</button>`;
   let m = dateBadge(r);
   const cl = checklistCount(g(r,'checklist'));
   if (cl.total) m += `<span>☑ ${cl.done}/${cl.total}</span>`;
@@ -1213,11 +1234,12 @@ function cardHtml(r){
   if (mode==='backlog' && (map.votes||map.votants)) m += `<button class="vote ${hasVoted(r)?'on':''}" data-vote="1" title="${map.votants?(hasVoted(r)?'Retirer mon vote':'Voter (un vote par personne)'):'Voter'}">👍 ${voteCount(r)}</button>`;
   if (mode==='backlog' && canEnterSuivi(r)) m += `<button class="tosuivi" data-tosuivi="1" title="Envoyer dans le Suivi, colonne « ${STATUT_DEFAUT} »">➜ Suivi</button>`;
   if (mode==='corbeille') m += `<button class="tosuivi" data-restore="1" title="Remettre la tâche dans le Kanban">↩ Restaurer</button>`;
-  const av = L(r,'personnes').map(n=>`<div class="av" title="${esc(n)}">${esc(initials(n))}</div>`).join('');
+  const names = L(r,'personnes');
+  const av = names.map(n=>`<span class="av" title="${esc(n)}">${esc(initials(n))}</span>`).join('') || (map.responsables && mode!=='corbeille' ? '<span class="av none">+</span>' : '');
   return `<div class="card${r.id===openId?' open':''}" draggable="${mode==='corbeille'?'false':'true'}" data-id="${r.id}">
     <div class="tags">${tags}</div>
     <div class="title">${esc(r.titre)||'<i>(sans titre)</i>'}</div>
-    <div class="meta">${m}<div class="avatars">${av}</div></div></div>`;
+    <div class="meta">${m}${map.responsables && mode!=='corbeille' ? `<button class="avatars" data-cresp="1" data-anchor="ca-${r.id}" aria-label="${names.length?'Responsables : '+esc(names.join(', '))+'. Modifier':'Ajouter un responsable'}" title="${names.length?'Modifier les responsables':'Ajouter un responsable'}">${av}</button>` : `<div class="avatars">${av}</div>`}</div></div>`;
 }
 function renderBoard(){
   const board = $('board');
@@ -1341,23 +1363,26 @@ function sigOf(r){
   return JSON.stringify([uploadNote, delcId, r.espace, metaTick, delConfirm===r.id, descEdit===r.id, side.comments.tick, side.history.tick, moi, r.titre, g(r,'statut'), g(r,'prio'), g(r,'charge'), g(r,'description'), g(r,'checklist'), g(r,'echeance'), g(r,'responsables'), g(r,'personnes'), g(r,'pj'), g(r,'votes'), g(r,'votants'),
     g(r,'creePar'), g(r,'creeLe'), g(r,'modifPar'), g(r,'modifLe'), isDel(r), ...FIELDS.filter(f=>f.kind==='tags').map(f=>L(r,f.key))]);
 }
-function summaryHtml(r){
-  const sg = (lbl, inner) => `<div class="sg"><div class="lbl">${lbl}</div><div class="vals">${inner}</div></div>`;
-  let h = '';
-  FIELDS.forEach(f=>{
-    if (!fieldOn(f)) return;
-    if (f.key==='statut' || f.key==='prio' || f.key==='charge'){
-      const v = g(r,f.key); if (v) h += sg(f.label, tagX(v, f.key));
-    } else if (f.kind==='tags'){
-      const l = L(r,f.key); if (l.length) h += sg(f.label, l.map(t=>tagX(t,f.key)).join(''));
-    } else if (f.key==='responsables'){
-      const ids = refIds(r.responsables), names = map.responsables ? ids.map(id=>[id, teamById[id]||('#'+id)]) : L(r,'personnes').map(n=>[null,n]);
-      if (names.length) h += sg('Responsables', names.map(([id,n])=>`<span class="chip"><span class="av">${esc(initials(n))}</span>${esc(n)}${id!=null?`<span class="x" data-rmresp="${id}" title="Retirer">×</span>`:''}</span>`).join(''));
-    } else if (f.key==='echeance'){
-      const d = toDate(g(r,'echeance')); if (d) h += sg('Échéance', dateBadge(r) + `<span class="none">${esc(d.toLocaleDateString('fr-FR'))}</span>`);
-    }
-  });
-  return h || '<span class="none">Aucune valeur : utilisez les boutons ci-dessus.</span>';
+const PC_ICONS = {statut:'<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/>', prio:'<path d="M5 21V4h13l-3 4 3 4H5"/>', charge:'<path d="M4 18a8 8 0 1 1 16 0"/><path d="m12 18 4-6"/>', responsables:'<circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/>', echeance:'<rect x="4" y="6" width="16" height="15"/><path d="M4 10h16M8 3v4M16 3v4"/>'};
+function propCell(r, f){   // une case : libellé (et mini-icône), valeurs ; un clic ouvre le menu du champ
+  let v = '';
+  if (f.key==='statut'){ if (g(r,'statut')) v = tag(g(r,'statut')); }
+  else if (f.key==='prio' || f.key==='charge'){ if (g(r,f.key)) v = tagX(g(r,f.key), f.key); }
+  else if (f.kind==='tags') v = L(r,f.key).map(t=>tagX(t,f.key)).join('');
+  else if (f.key==='responsables'){
+    const names = map.responsables ? refIds(r.responsables).map(id=>[id, teamById[id]||('#'+id)]) : L(r,'personnes').map(n=>[null,n]);
+    v = names.map(([id,n])=>`<span class="nm">${esc(n)}${id!=null?`<span class="x" data-rmresp="${id}" title="Retirer">×</span>`:''}</span>`).join('');
+  }
+  else if (f.key==='echeance'){ if (toDate(g(r,'echeance'))) v = dateBadge(r); }
+  const ic = PC_ICONS[f.key] ? SVG(PC_ICONS[f.key]).replace('width="18" height="18"','width="13" height="13"') : '';
+  return `<div class="pc" role="button" tabindex="0" data-anchor="fd-${f.key}" data-dd="${f.key}" aria-label="Modifier : ${esc(f.label)}"><div class="pl">${ic}${esc(f.label)}</div><div class="pv">${v || '<span class="addv">+ Ajouter</span>'}</div></div>`;
+}
+function propsHtml(r, vote){
+  const row = keys => FIELDS.filter(f=>keys.includes(f.key) && fieldOn(f));
+  const grid = fs => fs.length ? `<div class="pgrid" style="grid-template-columns:repeat(${fs.length},minmax(0,1fr))">${fs.map(f=>propCell(r,f)).join('')}</div>` : '';
+  const last = row(['sources']);
+  return grid(row(['statut','prio','charge','responsables','echeance'])) + grid(row(['produit','personas','themes','etiquettes'])) +
+    ((last.length || vote) ? `<div class="prow3">${last.map(f=>propCell(r,f)).join('')}${vote}</div>` : '');
 }
 function historyHtml(r){
   const S = side.history;
@@ -1413,7 +1438,6 @@ function renderFiche(){
     ? {sel: ae.id ? '#'+ae.id : '[data-draft="'+ae.dataset.draft+'"]', v: ae.value, s: ae.selectionStart, e: ae.selectionEnd} : null;
   const id = r.id, cur = ()=>index.get(id);             // toujours la version la plus récente de la carte
 
-  const dd = FIELDS.filter(fieldOn).map(fl=>`<button class="dd" data-anchor="fd-${fl.key}" data-dd="${fl.key}">${fl.label} ▾</button>`).join('');
   const vote = (map.votes||map.votants) ? `<button class="dd vote2 ${hasVoted(r)?'on':''}" id="fp-vote" title="${map.votants?(hasVoted(r)?'Retirer mon vote':'Voter (un vote par personne)'):'Voter'}">👍 ${voteCount(r)}</button>` : '';
   const fm = [], cp = g(r,'creePar'), cl = toDate(g(r,'creeLe')), mp = g(r,'modifPar'), ml = toDate(g(r,'modifLe'));
   if (cp || cl) fm.push('Créée'+(cl?' le '+esc(fmtDateTime(cl)):'')+(cp?' par '+esc(who(cp)):''));
@@ -1458,10 +1482,9 @@ function renderFiche(){
       ${uploadNote ? `<div class="none">${esc(uploadNote)}</div>` : `<label class="drop" id="fp-drop"><input type="file" id="fp-file" multiple style="position:absolute;opacity:0;width:1px;height:1px"><b>Choisir des fichiers</b> ou les déposer ici</label>`}</div>`;
   }
 
-  f.innerHTML = `<div class="fhead"><input type="text" class="ftitle" id="f-title" value="${esc(r.titre)}" placeholder="Titre de la tâche"><button class="close" id="fclose" title="Fermer (Échap)">×</button></div>
+  f.innerHTML = `<div class="fhead"><input type="text" class="ftitle" id="f-title" value="${esc(r.titre)}" placeholder="Titre de la tâche">${map.espace?`<button class="espill${isHP(r)?' hp':''}" data-anchor="fd-espace" data-dd="espace" title="Changer l'espace">${esc(g(r,'espace')||ESP_PROJET)} ▾</button>`:''}<button class="close" id="fclose" title="Fermer (Échap)">×</button></div>
     ${fmeta}<div class="fbody">
-      <div class="tb">${dd}${vote}</div>
-      <div class="summ">${summaryHtml(r)}</div>
+      ${propsHtml(r, vote)}
       ${acts}
       ${desc}
       <div class="sec"><div class="sh">☑ Checklist${clCount.total?`<span class="sub">${clCount.done}/${clCount.total}</span>`:''}</div>${checklist}</div>
@@ -1478,7 +1501,10 @@ function renderFiche(){
   $('fclose').onclick = closeFiche;
   const saveTitle = ()=>{ const v=$('f-title').value.trim(), c=cur(); if (c && v && v!==c.titre) update(c,{titre:v}); };
   $('f-title').onchange = saveTitle; $('f-title').onblur = saveTitle;
-  f.querySelectorAll('[data-dd]').forEach(b=>b.onclick=()=>openMenu('fd-'+b.dataset.dd, fieldMenu(id, b.dataset.dd)));
+  f.querySelectorAll('[data-dd]').forEach(b=>{
+    b.onclick = e=>{ if (e.target.closest('.x')) return; openMenu('fd-'+b.dataset.dd, fieldMenu(id, b.dataset.dd)); };
+    if (b.classList.contains('pc')) b.onkeydown = e=>{ if (e.key==='Enter' || e.key===' '){ e.preventDefault(); openMenu('fd-'+b.dataset.dd, fieldMenu(id, b.dataset.dd)); } };
+  });
   const vt = $('fp-vote'); if (vt) vt.onclick = ()=>castVote(cur());
   const bk = $('fp-back'); if (bk) bk.onclick = ()=>sendBack(cur());
   const tr = $('fp-trash'); if (tr) tr.onclick = ()=>trashTask(cur());
@@ -1726,6 +1752,8 @@ function wire(){
     };
   });
   document.querySelectorAll('[data-add]').forEach(b=>b.onclick=()=>openNewPop(b.dataset.add));
+  document.querySelectorAll('[data-cresp]').forEach(b=>b.onclick=e=>{ e.stopPropagation(); const c = cardOf(b); if (c) openMenu(b.dataset.anchor, fieldMenu(c.id,'responsables')); });
+  document.querySelectorAll('[data-cesp]').forEach(b=>b.onclick=e=>{ e.stopPropagation(); const c = cardOf(b); if (c) openMenu(b.dataset.anchor, fieldMenu(c.id,'espace')); });
   document.querySelectorAll('[data-cplus]').forEach(b=>b.onclick=e=>{ e.stopPropagation(); const c = cardOf(b); if (c) openMenu(b.dataset.anchor, fieldPicker(c.id)); });
   document.querySelectorAll('.card [data-rm]').forEach(x=>x.onclick=e=>{ e.stopPropagation(); const c=cardOf(x); if (c) removeValue(c, x.dataset.rm, x.dataset.val); });
   document.querySelectorAll('[data-vote]').forEach(b=>b.onclick=()=>castVote(cardOf(b)));
