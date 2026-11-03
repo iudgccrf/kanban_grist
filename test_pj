@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Test pièce jointe Grist</title>
+<script src="https://docs.getgrist.com/grist-plugin-api.js"></script>
+<style>
+  body { font: 14px/1.45 Arial, sans-serif; margin: 14px; color: #161616; }
+  label { display: block; margin: 8px 0 3px; font-weight: bold; }
+  select, input, button { font: inherit; padding: 5px; max-width: 100%; }
+  button { margin-top: 12px; cursor: pointer; }
+  pre { margin-top: 12px; padding: 10px; background: #f4f5f7; border: 1px solid #ddd; white-space: pre-wrap; word-break: break-word; user-select: all; }
+</style>
+</head>
+<body>
+<b>Test d'envoi d'une pièce jointe</b>
+<div>Sélectionnez d'abord une ligne de test dans le tableau lié à ce widget.</div>
+<label for="col">Colonne Pièces jointes</label>
+<select id="col"></select>
+<label for="file">Fichier (petit, sans donnée sensible)</label>
+<input type="file" id="file">
+<div><button id="go">Lancer le test</button></div>
+<pre id="log">En attente…</pre>
+
+<script>
+const $ = id => document.getElementById(id);
+const say = line => { $('log').textContent += '\n' + line; };
+let rowId = null;
+
+grist.ready({ requiredAccess: 'full' });
+grist.onRecord(r => { rowId = r ? r.id : null; });
+
+// Liste les colonnes de type Pièces jointes de la table du widget
+(async () => {
+  try {
+    const host = await grist.selectedTable.getTableId();
+    const T = await grist.docApi.fetchTable('_grist_Tables');
+    const C = await grist.docApi.fetchTable('_grist_Tables_column');
+    const ti = T.id[T.tableId.indexOf(host)];
+    const cols = C.id.map((id, i) => i).filter(i => C.parentId[i] === ti && C.type[i] === 'Attachments').map(i => C.colId[i]);
+    $('col').innerHTML = cols.map(c => `<option>${c}</option>`).join('') || '<option value="">(aucune colonne trouvée)</option>';
+  } catch (e) { say('Lecture des colonnes impossible : ' + (e.message || e) + ' (le widget a-t-il l\'accès complet ?)'); }
+})();
+
+$('go').onclick = async () => {
+  $('log').textContent = 'Début du test';
+  const file = $('file').files[0], col = $('col').value;
+  if (!file) return say('STOP : choisissez un fichier.');
+  if (!col) return say('STOP : aucune colonne Pièces jointes.');
+  if (!rowId) return say('STOP : sélectionnez une ligne dans le tableau.');
+  try {
+    const host = await grist.selectedTable.getTableId();
+    say('Table : ' + host + ' | ligne : ' + rowId + ' | colonne : ' + col);
+
+    say('Étape 1 : demande du jeton…');
+    const tok = await grist.docApi.getAccessToken({ readOnly: false });
+    say('OK. Serveur : ' + tok.baseUrl);   // le jeton lui-même n'est jamais affiché
+
+    say('Étape 2 : envoi du fichier…');
+    const form = new FormData();
+    form.append('upload', file, file.name);
+    let resp;
+    try {
+      resp = await fetch(`${tok.baseUrl}/attachments?auth=${encodeURIComponent(tok.token)}`, {
+        method: 'POST', body: form, headers: { 'X-Requested-With': 'XMLHttpRequest' },
+      });
+    } catch (e) {
+      return say('ÉCHEC réseau : ' + (e.message || e) + '\nProbable blocage CORS ou proxy : regardez l\'erreur rouge dans la console (F12).');
+    }
+    const body = await resp.text();
+    say('Réponse HTTP ' + resp.status + ' : ' + body.slice(0, 300));
+    if (!resp.ok) return say('ÉCHEC : le serveur a refusé l\'envoi.');
+    const newIds = JSON.parse(body);
+
+    say('Étape 3 : rattachement à la ligne…');
+    const t = await grist.docApi.fetchTable(host);
+    const cur = t[col][t.id.indexOf(rowId)];
+    const old = Array.isArray(cur) ? (cur[0] === 'L' ? cur.slice(1) : cur) : [];
+    await grist.docApi.applyUserActions([['UpdateRecord', host, rowId, { [col]: ['L', ...old, ...newIds] }]]);
+    say('RÉUSSI : le fichier doit apparaître dans la cellule.');
+  } catch (e) {
+    say('ÉCHEC : ' + (e.message || e));
+  }
+};
+</script>
+</body>
+</html>
