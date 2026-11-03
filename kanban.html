@@ -165,15 +165,26 @@
   .btn.danger { background:#c0392b; border-color:#c0392b; color:#fff; }
   #pop select { font:inherit; padding:5px 6px; border:1px solid #ccc; border-radius:4px; flex:1; min-width:0; }
   /* notifications */
-  header { position:relative; }
-  .hfirst { padding-right:48px; }
-  header #bell { position:absolute; top:6px; right:12px; width:36px; height:32px; padding:0; display:inline-flex; align-items:center; justify-content:center; color:#fff; background:var(--accent); border-color:var(--accent); }
-  header #bell:hover, header #bell.on { background:#2b3a9a; border-color:#2b3a9a; }
+  header { padding:0; gap:0; }
+  .htop { display:flex; flex-wrap:wrap; align-items:center; gap:7px; padding:7px 12px; background:#fff; border-bottom:1px solid #d7dbe8; }
+  .tabs { display:inline-flex; background:var(--accent-bg); border-radius:6px; padding:2px; }
+  header .tabb { border:0; background:none; color:#2b3a9a; font-weight:600; padding:5px 11px; border-radius:5px; }
+  header .tabb.on { background:var(--accent); color:#fff; }
+  .hfilt { display:flex; flex-wrap:wrap; align-items:center; gap:7px; padding:6px 12px; background:#eaecf2; }
+  .fgrp { display:inline-flex; flex-wrap:wrap; align-items:center; gap:5px; padding:4px 7px; background:#fff; border:1px solid #d7dbe8; border-radius:7px; }
+  .flab { font-size:11px; font-weight:700; color:#3f4770; text-transform:uppercase; letter-spacing:.03em; }
+  .hchips { display:flex; flex-wrap:wrap; align-items:center; gap:6px; padding:5px 12px; background:#f4f5f9; border-top:1px solid #d7dbe8; }
+  .fchip { display:inline-flex; align-items:center; gap:3px; background:#fff; border:1px solid #c5c9d6; border-radius:12px; padding:1px 3px 1px 9px; font-size:12px; }
+  header .fchip button { border:0; background:none; padding:0 5px; cursor:pointer; color:#555; }
+  header .clr { border:0; background:none; text-decoration:underline; color:#2b3a9a; font-size:12px; }
+  header .setb { background:#d7dae3; border-color:#d7dae3; }
+  header #bell { width:36px; height:32px; padding:0; display:inline-flex; align-items:center; justify-content:center; color:#fff; background:#c2410c; border-color:#c2410c; position:relative; flex:none; }
+  header #bell:hover, header #bell.on { background:#9a3412; border-color:#9a3412; }
   .admin { display:inline-flex; align-items:center; gap:4px; padding:3px 6px; background:#e6e8ec; border-radius:6px; }
   .admin .admt { font-size:11px; font-weight:600; color:#555; margin-right:2px; }
   header .admin button { background:transparent; border-color:transparent; color:#444; font-size:12px; padding:3px 6px; }
   header .admin button:hover { background:#fff; border-color:#bbb; }
-  #bell .nb { position:absolute; top:-6px; right:-6px; min-width:18px; height:18px; padding:0 4px; border-radius:9px; background:#b3261e; color:#fff; font-size:11px; font-weight:700; line-height:18px; text-align:center; }
+  #bell .nb { position:absolute; top:-6px; right:-6px; min-width:18px; height:18px; padding:0 4px; border-radius:9px; background:#fff; border:1px solid #9a3412; color:#9a3412; box-sizing:content-box; font-size:11px; font-weight:700; line-height:18px; text-align:center; }
   #notifs { display:none; position:fixed; z-index:30; top:48px; right:10px; width:min(420px,calc(100vw - 20px)); max-height:min(640px,calc(100vh - 60px)); flex-direction:column; background:#fff; border:1px solid #bbb; border-radius:8px; box-shadow:0 8px 28px rgba(0,0,0,.28); }
   #notifs .nh { display:flex; align-items:center; gap:8px; padding:10px 14px 6px; }
   #notifs .nh b { flex:1; font-size:15px; }
@@ -203,6 +214,16 @@
   /* fiche : cases de propriétés */
   .espill { flex:none; border:2px solid #4b2e83; border-radius:14px; padding:4px 11px; background:#fff; color:#4b2e83; font:inherit; font-size:12px; font-weight:700; cursor:pointer; white-space:nowrap; }
   .espill.hp { background:#4b2e83; color:#fff; }
+  #fiche { background:#eef0f4; }
+  #fiche .fhead { background:var(--accent-bg); border-bottom:0; }
+  #fiche .ftitle { color:#1f2a6b; }
+  .ftop { background:var(--accent-bg); padding:0 18px 14px; }
+  #fiche .fmeta { padding:0 8px 2px; margin:-4px 0 0; color:#3f4770; }
+  #fiche .fbody { padding:12px 12px 30px; }
+  #fiche .sec { margin:0 0 10px; padding:12px; background:#fff; border:1px solid #dcdfe8; border-radius:8px; }
+  #fiche .sh { color:#1f2a6b; }
+  .pc .pl { color:#3f4770; }
+  .pc { border-color:transparent; }
   .pgrid { display:grid; gap:8px; margin:10px 0 0; }
   .pc { min-width:0; padding:7px 8px; border:1px solid #dfe3f2; border-radius:6px; background:#fff; cursor:pointer; }
   .pc:hover, .pc:focus-visible { border-color:var(--accent); background:#f7f8fe; }
@@ -231,7 +252,7 @@
 
 <script>
 /* ============ CONFIGURATION ============ */
-const VERSION = '2026-11-03 d';   // affichée dans le bandeau et le diagnostic : permet de vérifier que le bon fichier est chargé
+const VERSION = '2026-11-03 e';   // affichée dans le bandeau et le diagnostic : permet de vérifier que le bon fichier est chargé
 const STATUTS = ['A faire','En cours','Bloqué','A valider','Terminé','Abandonné','Archivé'];
 const PRIOS   = ['P0 Critique','P1 Important','P2 Souhaitable','P3 Appréciable','Nouveau','Relégué','Abandonné','Déjà prévu'];
 const CHARGES = ['XS','S','M','L','XL'];
@@ -521,7 +542,7 @@ async function loadMeta(){
       teamCol = lab;
       const emCol = Object.keys(E).find(x=>/courriel|couriel|e_?mail|^mail/i.test(x));
       const mine = [];
-      const meCol = Object.keys(E).find(x=>/^est_?moi$/.test(norm(x))), voitCol = Object.keys(E).find(x=>/^voit_?hors_?projet/.test(norm(x)));
+      const meCol = Object.keys(E).find(x=>/^est_?moi$/.test(norm(x))), voitCol = Object.keys(E).find(x=>/^(manager|voit_?hors_?projet)/.test(norm(x)));
       (E.id||[]).forEach((id,i)=>{ const label = String(E[lab] ? E[lab][i] : '').trim(); if (label) { team.push({id, label, email: emCol ? String(E[emCol][i]||'').trim() : '', voit: !!(voitCol && E[voitCol][i]===true)}); teamById[id] = label;
         if (meCol && E[meCol][i]===true) mine.push({id, label}); } });   // la règle d'accès masque cette colonne sur toutes les lignes sauf la mienne
       if (mine.length===1){ moiId = mine[0].id; moi = mine[0].label; }
@@ -614,6 +635,8 @@ async function addComment(taskId, parentId, text){
   const f = {[c.task]: taskId, [c.text]: text};
   if (parentId && c.parent) f[c.parent] = parentId;
   const ids = team.filter(p=>text.includes('@'+p.label)).map(p=>p.id);
+  const card0 = index.get(taskId), outside = card0 ? team.filter(p=>ids.includes(p.id) && !canAccess(card0,p)) : [];
+  if (outside.length){ flash(`${outside.map(p=>p.label).join(', ')} n'a pas accès à cette tâche hors projet. Ajoutez d'abord la personne comme co-responsable : votre commentaire n'a pas été publié.`); return false; }
   if (ids.length && c.mentions) f[c.mentions] = ['L', ...ids];
   const res = await actRes([['AddRecord', TABLES.comments.table, null, f]]);
   if (!res) return false;
@@ -621,6 +644,7 @@ async function addComment(taskId, parentId, text){
   notifyComment(taskId, parentId, typeof id==='number' ? id : null, text, ids);
   await loadTable('comments'); return true;
 }
+const canAccess = (c, p) => !isHP(c) || p.voit || refIds(c.responsables).includes(p.id);   // qui voit la tâche, hors propriétaires du document
 function notifyComment(taskId, parentId, commentId, text, mentioned){
   const card = index.get(taskId), to = new Map();   // une seule notification par personne : Mention > Réponse > Commentaire
   if (card && map.responsables) refIds(card.responsables).forEach(p=>to.set(p,'Commentaire'));
@@ -725,19 +749,57 @@ function selectedOf(card, key){   // valeurs sélectionnées (ids pour les perso
   if (key==='responsables') return refIds(card.responsables);
   return L(card, key);
 }
-function setField(card, key, v){   // choisit (ou décoche) une valeur
+const amResp = c => { const m = meObj(); return !!(m && refIds(c.responsables).includes(m.id)); };
+function askConfirm(msg, okLabel){   // confirmation dans la page : les fenêtres du navigateur bloqueraient le widget
+  return new Promise(res=>{
+    const p = $('pop'); p.style.display = 'block';
+    p.innerHTML = `<b>Confirmer</b><div style="margin:8px 0;line-height:1.4">${esc(msg)}</div><div class="row" style="justify-content:flex-end"><button id="cf-no">Annuler</button><button class="primary" id="cf-ok">${esc(okLabel)}</button></div>`;
+    const end = v=>{ closePop(); res(v); };
+    $('cf-ok').onclick = ()=>end(true); $('cf-no').onclick = ()=>end(false);
+  });
+}
+const refuse = msg => { flash(msg); renderMenu(); return false; };
+async function setEspace(card, v){
+  const toHP = norm(v)===norm(ESP_HP), hasResp = map.responsables && refIds(card.responsables).length>0;
+  const changes = {espace:v}, encoded = {};
+  if (toHP){
+    if (hasResp && !amResp(card)){
+      if (!canSeeOthers()) return refuse("Seules les personnes responsables de la tâche ou le manager peuvent la passer en hors projet.");
+      if (!await askConfirm(`« ${card.titre||'Cette tâche'} » ne sera plus visible que par ses responsables et le manager.`, 'Passer en hors projet')) return false;
+    }
+    if (map.responsables && !hasResp){   // sans responsable, elle ne serait visible de personne : elle revient à son créateur, à défaut à la personne qui la déplace
+      const n = who(g(card,'creePar')), pp = team.find(t=>t.label===n) || meObj();
+      if (pp){ const list = isListRef(); changes.responsables = list ? [pp.id] : pp.id; encoded.responsables = list ? ['L',pp.id] : pp.id; }
+    }
+    if (map.statut && !g(card,'statut')) changes.statut = STATUT_DEFAUT;
+  } else if (isHP(card)){
+    if (!await askConfirm(`« ${card.titre||'Cette tâche'} », ses commentaires et son historique seront visibles par toute l'équipe.`, 'Passer en projet')) return false;
+    const pr = g(card,'prio')||'';
+    if (!(PRIO_GROOMEE.test(pr) || pr===PRIO_RELEGUE)){   // pas assez qualifiée pour le Suivi : retour au Backlog
+      if (map.statut) changes.statut = null;
+      if (map.prio && !pr) changes.prio = PRIO_NOUVEAU;
+    }
+  }
+  return update(index.get(card.id)||card, changes, encoded);
+}
+async function setField(card, key, v){   // choisit (ou décoche) une valeur
   if (key==='responsables'){
     const list = isListRef(), cur = refIds(card.responsables), has = cur.includes(v);
     const ids = list ? (has ? cur.filter(x=>x!==v) : [...cur, v]) : (has ? [] : [v]);
+    if (isHP(card)){
+      if (!ids.length) return refuse('Une tâche hors projet doit garder au moins un responsable.');
+      if (!canSeeOthers()){
+        const m = meObj();
+        if (!amResp(card)) return refuse('Seuls ses responsables et le manager peuvent modifier les responsables de cette tâche.');
+        if ((has && m && v===m.id) || (!list && !has)) return refuse('Seul le manager peut confier une tâche hors projet. Vous pouvez la partager en ajoutant un co-responsable.');
+        if (!has && !await askConfirm(`${teamById[v]||'Cette personne'} deviendra co-responsable de « ${card.titre||'cette tâche'} » et pourra la voir.`, 'Partager')){ renderMenu(); return false; }
+      }
+    }
     return update(card, {responsables: list ? ids : (ids[0]||0)}, {responsables: list ? ['L',...ids] : (ids[0]||0)});
   }
   const cur = L(card,key), has = cur.includes(v);
   if (key==='statut' && has) return;
-  if (key==='espace' && !has && norm(v)===norm(ESP_HP) && map.responsables && !refIds(card.responsables).length){
-    // Sans responsable, une tâche hors projet ne serait visible de personne : elle revient à son créateur (à défaut, à la personne qui la déplace).
-    const n = who(g(card,'creePar')), p = team.find(t=>t.label===n) || meObj();
-    if (p){ const list = isListRef(); return update(card, {espace:v, responsables: list?[p.id]:p.id}, {responsables: list?['L',p.id]:p.id}); }
-  }
+  if (key==='espace' && !has) return setEspace(card, v);
   if (isMulti(key)){ const next = has ? cur.filter(x=>x!==v) : [...cur, v]; return update(card, {[key]: next}, {[key]: ['L',...next]}); }
   return update(card, {[key]: has ? null : v});
 }
@@ -1013,7 +1075,7 @@ const groupChoices = () => (mode==='corbeille' ? [] : mode==='backlog' ? ['prio'
 const defaultGroup = () => mode==='backlog' ? 'prio' : 'statut';
 const groupKey = () => { const k = grpBy[mode] || defaultGroup(); return (k===defaultGroup() || groupChoices().includes(k)) ? k : defaultGroup(); };
 const orderKey = () => groupKey()===defaultGroup() ? mode : mode+':'+groupKey();   // ordre des colonnes mémorisé par vue et par regroupement
-const groupOf = r => mode==='corbeille' ? '' : groupKey()==='prio' ? String(prioEff(r)) : String(g(r, groupKey()) || '');
+const groupOf = r => mode==='corbeille' ? '' : groupKey()==='prio' ? String(prioEff(r)) : (groupKey()==='statut' && isHP(r) && !g(r,'statut')) ? STATUT_DEFAUT : String(g(r, groupKey()) || '');
 function groupList(){
   if (mode==='corbeille') return [{name:'', label:'Corbeille', color:'#8a8f98'}];
   const k = groupKey(), fld = FIELDS.find(f=>f.key===k);
@@ -1025,7 +1087,8 @@ function groupList(){
   const ord = colOrder[orderKey()] || [];
   const rank = n => { const i = ord.indexOf(n); return i>=0 ? i : 1000 + all.indexOf(n); };
   const list = all.map((n,i)=>({name:n, color:colors.groups[n]||defaults[i]||'#999', warn: hasDecl && !declared.includes(n)})).sort((a,b)=>rank(a.name)-rank(b.name));
-  if (records.some(r=>inView(r) && !groupOf(r))) list.push({name:'', label: k==='prio'?'Sans priorité':k==='charge'?'Sans charge':'Sans statut', color:'#bbb'});
+  if (mode==='perso' && k==='statut') list.unshift({name:'', label:'À qualifier', color:'#6b7280'});
+  else if (records.some(r=>inView(r) && !groupOf(r))) list.push({name:'', label: k==='prio'?'Sans priorité':k==='charge'?'Sans charge':'Sans statut', color:'#bbb'});
   return list;
 }
 function moveColumn(from, to){
@@ -1078,7 +1141,7 @@ function inView(r){
   if (mode==='corbeille') return isDel(r);
   if (isDel(r)) return false;
   const hasStatut = !!g(r,'statut');
-  if (mode==='perso') return isHP(r) || hasStatut;             // Mes tâches : le Suivi et le hors projet
+  if (mode==='perso') return isHP(r) || hasStatut || persoFor!=='*';   // Mes tâches : Suivi, hors projet et tâches à qualifier d'une personne
   if (isHP(r)) return false;                                   // Suivi et Backlog : uniquement le projet
   return mode==='backlog' ? !hasStatut : hasStatut;
 }
@@ -1107,49 +1170,63 @@ function passes(r){
 }
 
 /* ============ RENDU : barre du haut, bandeaux ============ */
+const filterOn = f => !(f.skipIn===mode) && (f.key==='personnes' ? (map.responsables||map.personnes) : map[f.key]);
+const FILTER_GROUPS = [['Travail',['prio','charge','statut','personne']],['Classement',['produit','personas','themes','etiquettes','sources']]];
+function dateMenu(){
+  return ()=>({ html:`<div class="mh">Échéance</div><div class="row"><label style="flex:1">du <input type="date" id="f-from" value="${F.from}"></label></div><div class="row"><label style="flex:1">au <input type="date" id="f-to" value="${F.to}"></label></div>`,
+    bind: el=>{ el.querySelector('#f-from').onchange = e=>{ F.from = e.target.value; render(); }; el.querySelector('#f-to').onchange = e=>{ F.to = e.target.value; render(); }; } });
+}
+function settingsMenu(){
+  return ()=>({ html:'<div class="mh">Réglages</div><div class="mi" data-s="mg">✎ Valeurs</div><div class="mi" data-s="diag">🔧 Diagnostic</div><div class="mi" data-s="col">🎨 Couleurs</div>',
+    bind: el=>el.querySelectorAll('[data-s]').forEach(x=>x.onclick=()=>{
+      const s = x.dataset.s; closeMenu();
+      if (s==='mg') openManage(FIELDS.find(f=>fieldOn(f) && f.kind!=='date') ? (manageKeys()[0]||{}).key : null);
+      if (s==='diag'){ diagOpen = !diagOpen; if (diagOpen) loadTableCount(); renderDiag(); }
+      if (s==='col'){ panelOpen = !panelOpen; if (panelOpen) closeFiche(); renderPanel(); }
+    }) });
+}
 function renderHeader(){
   const has = k => map && map[k];
-  let r1 = `<label>Vue <select id="mode">
-      <option value="suivi" ${mode==='suivi'?'selected':''}>Suivi de projet</option>
-      <option value="backlog" ${mode==='backlog'?'selected':''}>Backlog</option>
-      <option value="perso" ${mode==='perso'?'selected':''}>Mes tâches</option>${map&&map.supprimee?`<option value="corbeille" ${mode==='corbeille'?'selected':''}>🗑 Corbeille (${records.filter(isDel).length})</option>`:''}</select></label>`;
-  let r2 = '';
+  const keepQ = document.activeElement && document.activeElement.id==='f-q' ? [document.activeElement.selectionStart, document.activeElement.selectionEnd] : null;
+  const tabs = [['suivi','Suivi de projet'],['backlog','Backlog'],['perso','Mes tâches']];
+  if (map && map.supprimee) tabs.push(['corbeille',`Corbeille (${records.filter(isDel).length})`]);
+  let top = `<span class="tabs" role="group" aria-label="Vue">${tabs.map(([k,l])=>`<button class="tabb${mode===k?' on':''}" data-tab="${k}" aria-pressed="${mode===k}">${esc(l)}</button>`).join('')}</span>`;
+  let filt = '', chips = '';
   if (map){
     const gks = groupChoices();
-    if (gks.length>1) r1 += `<label>Grouper par <select id="f-grp">${gks.map(k=>`<option value="${k}" ${groupKey()===k?'selected':''}>${GROUP_LABELS[k]}</option>`).join('')}</select></label>`;
-    if (mode==='perso' && canSeeOthers()){
-      const names = team.length ? team.map(t=>t.label) : [...new Set(records.flatMap(r=>L(r,'personnes')))].sort((a,b)=>a.localeCompare(b,'fr'));
-      r1 += `<label title="Par défaut, vos tâches. Vous ne voyez que les tâches hors projet auxquelles vous avez accès.">Tâches de <select id="f-for"><option value="" ${!persoFor?'selected':''}>Moi${moi?' ('+esc(moi)+')':''}</option><option value="*" ${persoFor==='*'?'selected':''}>Tout le monde</option>${names.filter(n=>n!==moi).map(n=>`<option ${n===persoFor?'selected':''}>${esc(n)}</option>`).join('')}</select></label>`;
-    }
-    let fl = '';
-    FILTERS.forEach(f=>{
-      if (f.skipIn===mode) return;
-      if (f.key==='personnes' ? !(map.responsables||map.personnes) : !has(f.key)) return;
-      const n = F[f.id].length;
-      fl += `<button class="fb ${n?'active':''}" data-anchor="f-${f.id}" data-fbtn="${f.id}">${f.label}${n?` (${n})`:''} ▾</button>`;
-    });
-    if (fl) r1 += `<span class="flbl">Filtrer</span>` + fl;
-    if (has('echeance')) r2 += `<label>Échéance du <input type="date" id="f-from" value="${F.from}"></label><label>au <input type="date" id="f-to" value="${F.to}"></label>`;
+    if (gks.length>1) top += `<label>Grouper par <select id="f-grp">${gks.map(k=>`<option value="${k}" ${groupKey()===k?'selected':''}>${GROUP_LABELS[k]}</option>`).join('')}</select></label>`;
     const ns = sortPref.filter(s=>s && s.k).length;
-    r2 += `<button class="fb ${ns?'active':''}" data-anchor="sort" id="sortBtn" title="Trier les cartes de chaque colonne">Tri${ns?` (${ns})`:''} ▾</button>`;
+    top += `<button class="fb ${ns?'active':''}" data-anchor="sort" id="sortBtn" title="Trier les cartes de chaque colonne">Tri${ns?` (${ns})`:''} ▾</button>`;
+    if (mode==='perso' && canSeeOthers()){
+      const names = team.map(t=>t.label);
+      top += `<label title="Par défaut, vos tâches.">Tâches de <select id="f-for"><option value="" ${!persoFor?'selected':''}>Moi${moi?' ('+esc(moi)+')':''}</option><option value="*" ${persoFor==='*'?'selected':''}>Tout le monde</option>${names.filter(n=>n!==moi).map(n=>`<option ${n===persoFor?'selected':''}>${esc(n)}</option>`).join('')}</select></label>`;
+    }
+    const btn = f=>{ const n = F[f.id].length; return `<button class="fb ${n?'active':''}" data-anchor="f-${f.id}" data-fbtn="${f.id}">${f.label}${n?` (${n})`:''} ▾</button>`; };
+    FILTER_GROUPS.forEach(([lab,ids],gi)=>{
+      let inner = ids.map(id=>FILTERS.find(f=>f.id===id)).filter(filterOn).map(btn).join('');
+      if (gi===0 && has('echeance')) inner += `<button class="fb ${F.from||F.to?'active':''}" data-anchor="f-ech" id="echBtn">Échéance ▾</button>`;
+      if (inner) filt += `<span class="fgrp"><span class="flab">${lab}</span>${inner}</span>`;
+    });
+    FILTERS.filter(filterOn).forEach(f=>F[f.id].forEach(v=>{ chips += `<span class="fchip">${esc(f.label)} : ${esc(v)}<button data-chf="${f.id}" data-chv="${esc(v)}" aria-label="Retirer ce filtre">×</button></span>`; }));
+    if (F.from || F.to) chips += `<span class="fchip">Échéance${F.from?' du '+esc(new Date(F.from).toLocaleDateString('fr-FR')):''}${F.to?' au '+esc(new Date(F.to).toLocaleDateString('fr-FR')):''}<button data-chd="1" aria-label="Retirer ce filtre">×</button></span>`;
+    if (persoFor && mode==='perso') chips += `<span class="fchip">Tâches de : ${esc(persoFor==='*'?'Tout le monde':persoFor)}<button data-chp="1" aria-label="Retirer ce filtre">×</button></span>`;
   }
-  r2 += `<input type="search" id="f-q" placeholder="Mot clé…" value="${esc(F.q)}">`;
-  r2 += `<button id="reset">Réinitialiser</button><span class="spacer"></span><span class="admin" role="group" aria-label="Réglages"><span class="admt">Réglages</span><button id="mgBtn" title="Ajouter, renommer, supprimer des valeurs">✎ Valeurs</button><button id="diagBtn" title="Diagnostic">🔧 Diagnostic</button><button id="colorsBtn">🎨 Couleurs</button></span>`;
-  $('hdr').innerHTML = `<button id="bell" aria-haspopup="true"></button><div class="hrow hfirst">${r1}</div><div class="hrow">${r2}</div>`;
+  top += `<input type="search" id="f-q" placeholder="Mot clé…" value="${esc(F.q)}"><span class="spacer"></span><button class="setb" data-anchor="settings" id="setBtn">Réglages ▾</button><button id="bell" aria-haspopup="true"></button>`;
+  $('hdr').innerHTML = `<div class="htop">${top}</div>${filt?`<div class="hfilt">${filt}</div>`:''}${chips?`<div class="hchips"><span class="flab">Filtres actifs</span>${chips}<button class="clr" id="reset">Tout effacer</button></div>`:''}`;
 
-  $('mode').onchange = e=>{ mode=e.target.value; lsSet('mode',mode); closeMenu(); render(); };
+  document.querySelectorAll('[data-tab]').forEach(b=>b.onclick=()=>{ mode = b.dataset.tab; lsSet('mode',mode); closeMenu(); render(); });
   const mo = $('f-for'); if (mo) mo.onchange = ()=>{ persoFor = mo.value; render(); };
   const gp = $('f-grp'); if (gp) gp.onchange = ()=>{ grpBy[mode] = gp.value; lsSet('groups', grpBy); render(); };
   $('bell').onclick = ()=>{ notifOpen = !notifOpen; renderNotifs(); };
   const sb = $('sortBtn'); if (sb) sb.onclick = ()=>openMenu('sort', sortMenu());
+  const eb = $('echBtn'); if (eb) eb.onclick = ()=>openMenu('f-ech', dateMenu());
+  $('setBtn').onclick = ()=>openMenu('settings', settingsMenu());
   document.querySelectorAll('[data-fbtn]').forEach(b=>b.onclick=()=>{ const f = FILTERS.find(x=>x.id===b.dataset.fbtn); openMenu('f-'+f.id, filterMenu(f)); });
-  const ff = $('f-from'); if (ff) ff.onchange = ()=>{ F.from=ff.value; render(); };
-  const ft = $('f-to'); if (ft) ft.onchange = ()=>{ F.to=ft.value; render(); };
-  const q=$('f-q'); if(q) q.oninput = ()=>{F.q=q.value; renderBoard();};
-  $('reset').onclick = ()=>{ FILTERS.forEach(f=>F[f.id]=[]); F.from=F.to=F.q=''; persoFor=''; render(); };
-  $('mgBtn').onclick = ()=>openManage(FIELDS.find(f=>fieldOn(f) && f.kind!=='date') ? (manageKeys()[0]||{}).key : null);
-  $('diagBtn').onclick = ()=>{ diagOpen=!diagOpen; if(diagOpen) loadTableCount(); renderDiag(); };
-  $('colorsBtn').onclick = ()=>{ panelOpen=!panelOpen; if(panelOpen) closeFiche(); renderPanel(); };
+  document.querySelectorAll('[data-chf]').forEach(b=>b.onclick=()=>{ F[b.dataset.chf] = F[b.dataset.chf].filter(x=>x!==b.dataset.chv); render(); });
+  document.querySelectorAll('[data-chd]').forEach(b=>b.onclick=()=>{ F.from = F.to = ''; render(); });
+  document.querySelectorAll('[data-chp]').forEach(b=>b.onclick=()=>{ persoFor = ''; render(); });
+  const q = $('f-q'); if (q){ q.oninput = ()=>{ F.q = q.value; renderBoard(); }; if (keepQ){ q.focus(); try { q.setSelectionRange(keepQ[0], keepQ[1]); } catch(e){} } }
+  const rs = $('reset'); if (rs) rs.onclick = ()=>{ FILTERS.forEach(f=>F[f.id]=[]); F.from=F.to=F.q=''; persoFor=''; render(); };
 }
 function renderWarn(){
   const parts = [];
@@ -1197,7 +1274,7 @@ function renderDiag(){
     'Commentaires : '+(side.comments.ok===null?'non chargés':side.comments.ok?side.comments.note+' | colonnes '+JSON.stringify(side.comments.cols):'indisponibles – '+side.comments.note),
     'Historique : '+(side.history.ok===null?'non chargé':side.history.ok?side.history.note+' | colonnes '+JSON.stringify(side.history.cols):'indisponible – '+side.history.note),
     'Notifications : '+(side.notifs.ok===null?'non chargées':side.notifs.ok?side.notifs.note+' | colonnes '+JSON.stringify(side.notifs.cols):'indisponibles – '+side.notifs.note),
-    'Moi (selon Grist) : '+(moi||'inconnu')+' | ligne Equipe '+moiId+' | courriel '+((meObj()||{}).email||'?')+' | voit hors projet : '+canSeeOthers()+(idNote?' | '+idNote:'')+' | hors projet visibles : '+records.filter(isHP).length+' | tri : '+JSON.stringify(sortPref.filter(s=>s&&s.k)),
+    'Moi (selon Grist) : '+(moi||'inconnu')+' | ligne Equipe '+moiId+' | courriel '+((meObj()||{}).email||'?')+' | manager : '+canSeeOthers()+(idNote?' | '+idNote:'')+' | hors projet visibles : '+records.filter(isHP).length+' | tri : '+JSON.stringify(sortPref.filter(s=>s&&s.k)),
     'Cartes affichables dans cette vue : '+(map?records.filter(passes).length:'?'),
     'Première ligne brute : '+(rawFirst?JSON.stringify(rawFirst):'(aucune)').slice(0,400),
     'Première ligne convertie : '+first.slice(0,400),
@@ -1228,6 +1305,7 @@ function dateBadge(r){
 function cardHtml(r){
   let tags = '';
   if (isHP(r)) tags += `<button class="hpill" data-cesp="1" data-anchor="ce-${r.id}" title="Changer l'espace">${esc(ESP_HP)} ▾</button>`;
+  if (mode==='perso' && !isHP(r) && !g(r,'statut') && g(r,'prio')===PRIO_RELEGUE) tags += '<span class="tag" style="background:#e6e8ec;color:#444">Retour du Suivi</span>';
   if (mode!=='backlog' && g(r,'prio')) tags += tagX(g(r,'prio'),'prio');
   if (g(r,'charge')) tags += tagX(g(r,'charge'),'charge');
   ['etiquettes','personas','produit','themes','sources'].forEach(k=>L(r,k).forEach(t=>tags+=tagX(t,k)));
@@ -1304,14 +1382,15 @@ function openNewPop(group){
     <div class="row"><input id="nt" placeholder="Titre de la tâche…" autocomplete="off"></div>
     <div class="row" style="justify-content:flex-end"><button id="ncancel">Annuler</button><button class="primary" id="nok">Créer</button></div>`;
   const perso = mode==='perso';
-  if (perso) p.querySelector('.hint').textContent = '('+group+' · hors projet, à votre nom)';
+  const forOther = perso && canSeeOthers() && persoFor && persoFor!=='*' ? team.find(t=>t.label===persoFor) : null;
+  if (perso) p.querySelector('.hint').textContent = '('+group+' · hors projet, au nom de '+(forOther ? forOther.label : 'vous')+')';
   const ok = async ()=>{
     const t = $('nt').value.trim();
     if (!t) return; closePop();
     const gk = groupKey();
     let me = null;
     if (perso){
-      me = meObj();
+      me = forOther || meObj();
       if (!me || !map.responsables || !map.espace){ flash(idNote || 'Création impossible : associez les colonnes Responsables et Espace.'); return; }
     }
     const f = {[map.titre]: t, [map[gk]]: group};                       // la colonne cliquée donne la valeur (Statut, Prio ou Charge)
@@ -1362,7 +1441,7 @@ async function downloadAttachment(id){
 }
 
 /* ============ FICHE DE LA CARTE (version compacte) ============ */
-function openFiche(id){ openId = id; delConfirm = null; delcId = null; descEdit = null; panelOpen = false; ficheSig = ''; if (map && map.pj) loadAttachMeta(); render(); }
+function openFiche(id){ if (id!==openId) drafts = {}; openId = id; delConfirm = null; delcId = null; descEdit = null; panelOpen = false; ficheSig = ''; if (map && map.pj) loadAttachMeta(); render(); }
 function closeFiche(){ if (openId===null) return; openId = null; delConfirm = null; descEdit = null; ficheSig = ''; $('fiche').style.display='none'; closeMenu(); renderBoard(); }
 function refreshFiche(){ ficheSig=''; renderFiche(); renderMenu(); }
 function sigOf(r){
@@ -1383,12 +1462,10 @@ function propCell(r, f){   // une case : libellé (et mini-icône), valeurs ; un
   const ic = PC_ICONS[f.key] ? SVG(PC_ICONS[f.key]).replace('width="18" height="18"','width="13" height="13"') : '';
   return `<div class="pc" role="button" tabindex="0" data-anchor="fd-${f.key}" data-dd="${f.key}" aria-label="Modifier : ${esc(f.label)}"><div class="pl">${ic}${esc(f.label)}</div><div class="pv">${v || '<span class="addv">+ Ajouter</span>'}</div></div>`;
 }
-function propsHtml(r, vote){
-  const row = keys => FIELDS.filter(f=>keys.includes(f.key) && fieldOn(f));
+function propsHtml(r){
+  const row = keys => keys.map(k=>FIELDS.find(f=>f.key===k)).filter(f=>f && fieldOn(f));
   const grid = fs => fs.length ? `<div class="pgrid" style="grid-template-columns:repeat(${fs.length},minmax(0,1fr))">${fs.map(f=>propCell(r,f)).join('')}</div>` : '';
-  const last = row(['sources']);
-  return grid(row(['statut','prio','charge','responsables','echeance'])) + grid(row(['produit','personas','themes','etiquettes'])) +
-    ((last.length || vote) ? `<div class="prow3">${last.map(f=>propCell(r,f)).join('')}${vote}</div>` : '');
+  return grid(row(['statut','prio','charge','responsables','echeance'])) + grid(row(['produit','personas','themes','etiquettes','sources']));
 }
 function historyHtml(r){
   const S = side.history;
@@ -1422,13 +1499,22 @@ function commentsHtml(r){
       <div class="row"><button class="btn ghost" data-at="new" data-anchor="at-new">@ Citer</button><span class="grow"></span><button class="btn" id="cm-send">Publier</button></div>
       </div>`;
 }
-function atMenu(draftKey){
-  return ()=>({ html: '<div class="mh">Citer une personne</div>' + (team.map(t=>`<div class="mi" data-at-p="${esc(t.label)}">@${esc(t.label)}</div>`).join('') || '<div class="mh" style="text-transform:none">Liste des personnes indisponible</div>'),
-    bind: el=>el.querySelectorAll('[data-at-p]').forEach(x=>x.onclick=()=>{
-      const ta = document.querySelector(`[data-draft="${draftKey}"]`); if (!ta) return;
-      const pos = ta.selectionStart ?? ta.value.length, ins = '@'+x.dataset.atP+' ';
-      ta.value = ta.value.slice(0,pos)+ins+ta.value.slice(pos); drafts[draftKey] = ta.value; closeMenu(); ta.focus(); ta.selectionStart = ta.selectionEnd = pos+ins.length;
-    }) });
+const HP_CITE_MSG = "Tâche hors projet : seuls ses responsables et le manager y ont accès. Pour citer quelqu'un d'autre, ajoutez-le d'abord comme co-responsable.";
+function atMenu(draftKey, cardId){
+  return ()=>{
+    const c = index.get(cardId), hp = c && isHP(c), people = c ? team.filter(t=>canAccess(c,t)) : team;
+    return { html: '<div class="mh">Citer une personne</div>' + (hp ? `<div class="mh" style="text-transform:none;letter-spacing:0;line-height:1.35">${esc(HP_CITE_MSG)}</div>` : '') +
+        (people.map(t=>`<div class="mi" data-at-p="${esc(t.label)}">@${esc(t.label)}</div>`).join('') || '<div class="mh" style="text-transform:none">Liste des personnes indisponible</div>') +
+        (hp && (canSeeOthers() || amResp(c)) ? '<div class="sep"></div><span class="lnk" data-at-add>+ Ajouter un co-responsable</span>' : ''),
+      bind: el=>{
+        el.querySelectorAll('[data-at-p]').forEach(x=>x.onclick=()=>{
+          const ta = document.querySelector(`[data-draft="${draftKey}"]`); if (!ta) return;
+          const pos = ta.selectionStart ?? ta.value.length, ins = '@'+x.dataset.atP+' ';
+          ta.value = ta.value.slice(0,pos)+ins+ta.value.slice(pos); drafts[draftKey] = ta.value; closeMenu(); ta.focus(); ta.selectionStart = ta.selectionEnd = pos+ins.length;
+        });
+        const ad = el.querySelector('[data-at-add]'); if (ad) ad.onclick = ()=>{ menu.build = fieldMenu(cardId,'responsables'); renderMenu(); };
+      } };
+  };
 }
 function renderFiche(){
   const f = $('fiche');
@@ -1444,7 +1530,7 @@ function renderFiche(){
     ? {sel: ae.id ? '#'+ae.id : '[data-draft="'+ae.dataset.draft+'"]', v: ae.value, s: ae.selectionStart, e: ae.selectionEnd} : null;
   const id = r.id, cur = ()=>index.get(id);             // toujours la version la plus récente de la carte
 
-  const vote = (map.votes||map.votants) ? `<button class="dd vote2 ${hasVoted(r)?'on':''}" id="fp-vote" title="${map.votants?(hasVoted(r)?'Retirer mon vote':'Voter (un vote par personne)'):'Voter'}">👍 ${voteCount(r)}</button>` : '';
+  const vote = ((map.votes||map.votants) && !isHP(r)) ? `<button class="dd vote2 ${hasVoted(r)?'on':''}" id="fp-vote" title="${map.votants?(hasVoted(r)?'Retirer mon vote':'Voter (un vote par personne)'):'Voter'}">👍 ${voteCount(r)}</button>` : '';
   const fm = [], cp = g(r,'creePar'), cl = toDate(g(r,'creeLe')), mp = g(r,'modifPar'), ml = toDate(g(r,'modifLe'));
   if (cp || cl) fm.push('Créée'+(cl?' le '+esc(fmtDateTime(cl)):'')+(cp?' par '+esc(who(cp)):''));
   if (mp || ml) fm.push('Modifiée'+(ml?' le '+esc(fmtDateTime(ml)):'')+(mp?' par '+esc(who(mp)):''));
@@ -1460,11 +1546,11 @@ function renderFiche(){
   if (map.description){
     const dtxt = g(r,'description') || '';
     desc = descEdit===r.id
-      ? `<div class="sec"><div class="sh">📝 Description</div>
+      ? `<div class="sec"><div class="sh">📝 Description<span class="grow"></span>${vote}</div>
           <div class="mdbar"><button class="btn ghost" data-md="bold" title="Mettre en gras (ou insérer **texte**)"><b>G</b> Gras</button><button class="btn ghost" data-md="list" title="Liste à puces">• Liste</button><button class="btn ghost" data-md="link" title="Insérer un lien">🔗 Lien</button><span class="none">Échap : terminer</span></div>
           <textarea class="desc" id="fp-desc" placeholder="Ajouter une description plus détaillée…">${esc(dtxt)}</textarea>
           <div class="none">Mise en forme : **gras** · « - » en début de ligne pour une liste · https://… pour un lien, ou [texte](https://…)</div></div>`
-      : `<div class="sec"><div class="sh">📝 Description<button class="btn ghost" id="fp-descedit" style="margin-left:auto" title="Modifier la description">✎ Modifier</button></div>
+      : `<div class="sec"><div class="sh">📝 Description<span class="grow"></span>${vote}<button class="btn ghost" id="fp-descedit" title="Modifier la description">✎ Modifier</button></div>
           <div class="mdview" id="fp-descv">${dtxt.trim() ? mdHtml(dtxt) : '<span class="none">Ajouter une description plus détaillée…</span>'}</div></div>`;
   }
 
@@ -1489,9 +1575,9 @@ function renderFiche(){
   }
 
   f.innerHTML = `<div class="fhead"><input type="text" class="ftitle" id="f-title" value="${esc(r.titre)}" placeholder="Titre de la tâche">${map.espace?`<button class="espill${isHP(r)?' hp':''}" data-anchor="fd-espace" data-dd="espace" title="Changer l'espace">${esc(g(r,'espace')||ESP_PROJET)} ▾</button>`:''}<button class="close" id="fclose" title="Fermer (Échap)">×</button></div>
-    ${fmeta}<div class="fbody">
-      ${propsHtml(r, vote)}
-      ${acts}
+    <div class="ftop">${fmeta}${propsHtml(r)}${acts}</div>
+    <div class="fbody">
+      ${map.description ? '' : (vote ? `<div class="sec">${vote}</div>` : '')}
       ${desc}
       <div class="sec"><div class="sh">☑ Checklist${clCount.total?`<span class="sub">${clCount.done}/${clCount.total}</span>`:''}</div>${checklist}</div>
       ${pj}
@@ -1578,7 +1664,7 @@ function renderFiche(){
 
   /* commentaires */
   f.querySelectorAll('[data-draft]').forEach(t=>t.oninput = ()=>{ drafts[t.dataset.draft] = t.value; });
-  f.querySelectorAll('[data-at]').forEach(b=>b.onclick=()=>openMenu(b.dataset.anchor, atMenu(b.dataset.at)));
+  f.querySelectorAll('[data-at]').forEach(b=>b.onclick=()=>openMenu(b.dataset.anchor, atMenu(b.dataset.at, id)));
   f.querySelectorAll('[data-reply]').forEach(b=>b.onclick=()=>{ const el=$('rp-'+b.dataset.reply); el.style.display = el.style.display==='none' ? 'block' : 'none'; const ta=el.querySelector('textarea'); if (el.style.display==='block') ta.focus(); });
   f.querySelectorAll('[data-send]').forEach(b=>b.onclick=async()=>{ const k='reply-'+b.dataset.send; const t=drafts[k]; if (await addComment(id, +b.dataset.send, t)){ delete drafts[k]; refreshFiche(); } });
   f.querySelectorAll('[data-delc]').forEach(b=>b.onclick=()=>{ const cid = +b.dataset.delc; if (delcId===cid) deleteComment(cid); else { delcId = cid; refreshFiche(); } });
@@ -1754,6 +1840,11 @@ function wire(){
       if (isColDrag(e)){ moveColumn(e.dataTransfer.getData('application/x-col'), col.dataset.group); return; }
       if (mode==='corbeille') return;
       const r = index.get(+(e.dataTransfer.getData('text/plain') || dragId)); if(!r) return;
+      if (mode==='perso' && groupKey()==='statut'){
+        const target = col.dataset.group;
+        if (!target){ if (isHP(r)) flash("Une tâche hors projet garde toujours un statut."); else if (g(r,'statut')) sendBack(r); return; }
+        if (!isHP(r) && !g(r,'statut') && !canEnterSuivi(r)){ flash("Une tâche à qualifier ne passe au Suivi que depuis une prio P0 à P3 ou « Relégué ». Définissez d'abord sa prio."); return; }
+      }
       update(r, {[groupKey()]: col.dataset.group || null});
     };
   });
