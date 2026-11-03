@@ -75,7 +75,7 @@
   /* fiche de la carte */
   #fiche { display:none; position:fixed; top:0; right:0; bottom:0; width:min(620px,100vw); background:#fff; border-left:1px solid #ccc; box-shadow:-6px 0 18px rgba(0,0,0,.2); z-index:20; overflow-y:auto; }
   #fiche .fhead { position:sticky; top:0; z-index:3; background:#fff; display:flex; align-items:center; gap:10px; padding:10px 18px; border-bottom:1px solid #eee; }
-  #fiche .ftitle { flex:1; min-width:0; font:inherit; font-size:18px; font-weight:700; border:1px solid transparent; border-radius:6px; padding:6px 8px; background:transparent; }
+  #fiche .ftitle { flex:1; min-width:0; font:inherit; font-size:23px; font-weight:800; line-height:1.2; border:1px solid transparent; border-radius:6px; padding:6px 8px; background:transparent; }
   #fiche .ftitle:hover, #fiche .ftitle:focus { border-color:#ccc; background:#fff; }
   #fiche .fbody { padding:10px 20px 40px; }
   .tb { display:flex; flex-wrap:wrap; gap:6px; }
@@ -178,8 +178,10 @@
   header .fchip button { border:0; background:none; padding:0 5px; cursor:pointer; color:#555; }
   header .clr { border:0; background:none; text-decoration:underline; color:#2b3a9a; font-size:12px; }
   header .setb { background:#d7dae3; border-color:#d7dae3; }
-  header #bell { width:36px; height:32px; padding:0; display:inline-flex; align-items:center; justify-content:center; color:#fff; background:#c2410c; border-color:#c2410c; position:relative; flex:none; }
-  header #bell:hover, header #bell.on { background:#9a3412; border-color:#9a3412; }
+  header #bell { width:36px; height:32px; padding:0; display:inline-flex; align-items:center; justify-content:center; color:#fff; background:var(--accent); border-color:var(--accent); position:relative; flex:none; }
+  header #bell:hover, header #bell.on { background:#2b3a9a; border-color:#2b3a9a; }
+  header #bell.has { background:#c2410c; border-color:#c2410c; }
+  header #bell.has:hover, header #bell.has.on { background:#9a3412; border-color:#9a3412; }
   .admin { display:inline-flex; align-items:center; gap:4px; padding:3px 6px; background:#e6e8ec; border-radius:6px; }
   .admin .admt { font-size:11px; font-weight:600; color:#555; margin-right:2px; }
   header .admin button { background:transparent; border-color:transparent; color:#444; font-size:12px; padding:3px 6px; }
@@ -217,6 +219,7 @@
   #fiche { background:#eef0f4; }
   #fiche .fhead { background:var(--accent-bg); border-bottom:0; }
   #fiche .ftitle { color:#1f2a6b; }
+  #fiche input[type=text].ftitle { font-size:23px; font-weight:800; line-height:1.2; }
   .ftop { background:var(--accent-bg); padding:0 18px 14px; }
   #fiche .fmeta { padding:0 8px 2px; margin:-4px 0 0; color:#3f4770; }
   #fiche .fbody { padding:12px 12px 30px; }
@@ -231,7 +234,17 @@
   .pc .pv { margin-top:5px; }
   .ftop { padding:0 12px 12px; display:flow-root; }
   #fiche .fhead { padding:10px 12px; }
-  .pgrid { display:grid; gap:8px; margin:10px 0 0; }
+  .pgrid { display:grid; gap:6px; margin:8px 0 0; }
+  .pb { display:flex; align-items:center; gap:3px; min-width:0; padding:5px 6px; border:1px solid #c9d0ea; border-radius:6px; background:#fff; color:#2b3a9a; font:inherit; font-size:12px; font-weight:600; cursor:pointer; white-space:nowrap; }
+  .pb:hover, .pb:focus-visible { border-color:var(--accent); background:#f4f6ff; }
+  .pb svg { flex:none; }
+  .pb .pln { min-width:0; overflow:hidden; text-overflow:ellipsis; }
+  .pb .chev { margin-left:auto; }
+  .psum { display:flex; flex-wrap:wrap; gap:6px 16px; margin-top:10px; }
+  .psum .sg .lbl { color:#3f4770; }
+  .avs { display:flex; border:0; background:none; padding:0 0 0 6px; cursor:pointer; }
+  .avs:hover .av, .avs:focus-visible .av { box-shadow:0 0 0 2px var(--accent); }
+  .avs .av { width:24px; height:24px; }
   .pc { min-width:0; padding:7px 8px; border:1px solid #dfe3f2; border-radius:6px; background:#fff; cursor:pointer; }
   .pc:hover, .pc:focus-visible { border-color:var(--accent); background:#f7f8fe; }
   .pc .pl { display:flex; align-items:center; gap:4px; font-size:11px; font-weight:600; color:#595959; margin-bottom:5px; }
@@ -259,7 +272,7 @@
 
 <script>
 /* ============ CONFIGURATION ============ */
-const VERSION = '2026-11-03 g';   // affichée dans le bandeau et le diagnostic : permet de vérifier que le bon fichier est chargé
+const VERSION = '2026-11-03 j';   // affichée dans le bandeau et le diagnostic : permet de vérifier que le bon fichier est chargé
 const STATUTS = ['A faire','En cours','Bloqué','A valider','Terminé','Abandonné','Archivé'];
 const PRIOS   = ['P0 Critique','P1 Important','P2 Souhaitable','P3 Appréciable','Nouveau','Relégué','Abandonné','Déjà prévu'];
 const CHARGES = ['XS','S','M','L','XL'];
@@ -1457,23 +1470,25 @@ function sigOf(r){
 }
 const CHEVRON = '<svg class="chev" aria-hidden="true" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>';
 const PC_ICONS = {statut:'<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/>', prio:'<path d="M5 21V4h13l-3 4 3 4H5"/>', charge:'<path d="M4 18a8 8 0 1 1 16 0"/><path d="m12 18 4-6"/>', responsables:'<circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/>', echeance:'<rect x="4" y="6" width="16" height="15"/><path d="M4 10h16M8 3v4M16 3v4"/>'};
-function propCell(r, f){   // une case : libellé (et mini-icône), valeurs ; un clic ouvre le menu du champ
-  let v = '';
-  if (f.key==='statut'){ if (g(r,'statut')) v = tag(g(r,'statut')); }
-  else if (f.key==='prio' || f.key==='charge'){ if (g(r,f.key)) v = tagX(g(r,f.key), f.key); }
-  else if (f.kind==='tags') v = L(r,f.key).map(t=>tagX(t,f.key)).join('');
-  else if (f.key==='responsables'){
-    const names = map.responsables ? refIds(r.responsables).map(id=>[id, teamById[id]||('#'+id)]) : L(r,'personnes').map(n=>[null,n]);
-    v = names.map(([id,n])=>`<span class="nm">${esc(n)}${id!=null?`<span class="x" data-rmresp="${id}" title="Retirer">×</span>`:''}</span>`).join('');
+function propValue(r, f){   // valeurs affichées sous les boutons
+  if (f.key==='statut') return g(r,'statut') ? tag(g(r,'statut')) : '';
+  if (f.key==='prio' || f.key==='charge') return g(r,f.key) ? tagX(g(r,f.key), f.key) : '';
+  if (f.kind==='tags') return L(r,f.key).map(t=>tagX(t,f.key)).join('');
+  if (f.key==='echeance') return toDate(g(r,'echeance')) ? dateBadge(r) : '';
+  if (f.key==='responsables'){   // initiales seulement : la place reste la même, quel que soit le nombre de membres
+    const names = map.responsables ? refIds(r.responsables).map(id=>teamById[id]||('#'+id)) : L(r,'personnes');
+    return names.length ? `<button class="avs" data-anchor="fd-responsables" data-dd="responsables" title="${esc(names.join(', '))}" aria-label="Membres : ${esc(names.join(', '))}. Modifier">${names.map(n=>`<span class="av" title="${esc(n)}">${esc(initials(n))}</span>`).join('')}</button>` : '';
   }
-  else if (f.key==='echeance'){ if (toDate(g(r,'echeance'))) v = dateBadge(r); }
-  const ic = PC_ICONS[f.key] ? SVG(PC_ICONS[f.key]).replace('width="18" height="18"','width="13" height="13"') : '';
-  return `<div class="pc" role="button" tabindex="0" data-anchor="fd-${f.key}" data-dd="${f.key}" aria-label="Modifier : ${esc(f.label)}"><div class="pl">${ic}<span class="pln">${esc(f.label)}</span>${CHEVRON}</div>${v ? `<div class="pv">${v}</div>` : ''}</div>`;
+  return '';
 }
 function propsHtml(r){
   const row = keys => keys.map(k=>FIELDS.find(f=>f.key===k)).filter(f=>f && fieldOn(f));
-  const grid = fs => fs.length ? `<div class="pgrid" style="grid-template-columns:repeat(${fs.length},minmax(0,1fr))">${fs.map(f=>propCell(r,f)).join('')}</div>` : '';
-  return grid(row(['statut','prio','charge','responsables','echeance'])) + grid(row(['produit','personas','themes','etiquettes','sources']));
+  const btn = f=>{ const ic = PC_ICONS[f.key] ? SVG(PC_ICONS[f.key]).replace('width="18" height="18"','width="13" height="13"') : '';
+    return `<button class="pb" data-anchor="fd-${f.key}" data-dd="${f.key}">${ic}<span class="pln">${esc(f.label)}</span>${CHEVRON}</button>`; };
+  const grid = fs => fs.length ? `<div class="pgrid" style="grid-template-columns:repeat(${fs.length},minmax(0,1fr))">${fs.map(btn).join('')}</div>` : '';
+  const main = row(['statut','prio','charge','responsables','echeance']), other = row(['produit','personas','themes','etiquettes','sources']);
+  const vals = [...main, ...other].map(f=>{ const v = propValue(r,f); return v ? `<div class="sg"><div class="lbl">${esc(f.label)}</div><div class="vals">${v}</div></div>` : ''; }).join('');
+  return grid(main) + grid(other) + (vals ? `<div class="psum">${vals}</div>` : '');
 }
 function historyHtml(r){
   const S = side.history;
@@ -1794,7 +1809,7 @@ function maybeToast(items){   // une nouvelle assignation est signalée sans att
 function renderNotifs(){
   const bell = $('bell'), panel = $('notifs'); if (!bell) return;
   const items = notifItems(), un = items.filter(i=>i.unread).length;
-  bell.className = notifOpen ? 'on' : '';
+  bell.className = (notifOpen ? 'on ' : '') + (un ? 'has' : '');
   bell.title = un ? `${un} notification(s) non lue(s)` : 'Notifications';
   bell.setAttribute('aria-label', bell.title); bell.setAttribute('aria-expanded', String(notifOpen));
   bell.innerHTML = SVG('<path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/>') + (un ? `<span class="nb">${un>99?'99+':un}</span>` : '');
