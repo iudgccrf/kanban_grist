@@ -209,6 +209,8 @@
   #ntoast { display:none; position:fixed; z-index:35; bottom:14px; right:10px; width:min(380px,calc(100vw - 20px)); align-items:center; gap:10px; padding:10px 12px; background:#fff1e3; border:2px solid #c2410c; border-radius:8px; box-shadow:0 8px 28px rgba(0,0,0,.3); cursor:pointer; }
   #ntoast .tx { flex:1; min-width:0; line-height:1.35; overflow-wrap:anywhere; }
   .hlflash { background:#fff3c4 !important; outline:2px solid #d9a400; border-radius:6px; }
+  .ten { display:inline-flex; align-items:center; gap:3px; font-size:12px; cursor:pointer; }
+  .ten input { margin:0; accent-color:var(--accent); }
   .cadd { margin-left:2px; width:24px; height:24px; border:1px solid #c9d0ea; border-radius:5px; background:#f4f6ff; color:#2b3a9a; font:inherit; font-size:15px; font-weight:700; line-height:1; cursor:pointer; padding:0; flex:none; }
   .cadd:hover { background:var(--accent-bg); border-color:var(--accent); }
   .csub { margin:-5px 4px 7px; font-size:11px; color:#595959; }
@@ -279,7 +281,7 @@
 
 <script>
 /* ============ CONFIGURATION ============ */
-const VERSION = '2026-11-04 a';   // affichée dans le bandeau et le diagnostic : permet de vérifier que le bon fichier est chargé
+const VERSION = '2026-11-04 c';   // affichée dans le bandeau et le diagnostic : permet de vérifier que le bon fichier est chargé
 const STATUTS = ['A faire','En cours','Bloqué','A valider','Terminé','Abandonné','Archivé'];
 const PRIOS   = ['P0 Critique','P1 Important','P2 Souhaitable','P3 Appréciable','Nouveau','Relégué','Abandonné','Déjà prévu'];
 const CHARGES = ['XS','S','M','L','XL'];
@@ -324,6 +326,7 @@ const NOTIF_TYPES = {
 };
 const SIDE_POLL_MS = 15000;
 const HIST_KEYS = {espace:'Espace', statut:'Statut', prio:'Prio', charge:'Charge', echeance:'Échéance', responsables:'Responsables'};   // champs dont les changements sont journalisés
+const isStatutClos = v => STATUTS_FINIS.includes(v) || /valid/.test(norm(v));   // Terminé, Abandonné, Archivé et validation : cocher « tenue » n'y change pas le statut
 const NOTIF_SKIP = ['echeanceTenue','votes','votants','commentaires','creePar','creeLe','modifPar','modifLe','supprimee','personnes'];   // champs qui ne déclenchent pas de notification
 const CARD_KEYS = ['statut','prio','charge','responsables','espace'];       // champs modifiables avec le bouton ＋ des cartes
 const STATUT_DEFAUT = 'A faire';
@@ -465,7 +468,7 @@ function refIds(v){   // identifiants de lignes d'une colonne Référence / List
   }).filter(x=>typeof x==='number' && x>0);
 }
 function g(r,k){ return map && map[k] ? r[k] : undefined; }
-const isHP = r => !!(map && map.espace && ['restreint','hors projet'].includes(norm(r && r.espace)));              // tâche restreinte
+const isHP = r => !!(map && map.espace && r && r.espace && norm(r.espace)!==norm(ESP_PROJET));   // toute valeur autre que Projet est traitée comme restreinte : en cas de doute, on n'expose pas la tâche              // tâche restreinte
 const isDel = r => !!(map && map.supprimee && r && r.supprimee);                        // tâche à la corbeille
 const prioEff = r => g(r,'prio') || (mode==='backlog' ? PRIO_NOUVEAU : '');           // Backlog : une prio vide compte comme « Nouveau"
 // valeurs d'une fiche pour un champ, sous forme de liste de textes
@@ -777,8 +780,8 @@ async function update(card, changes, encoded, extraLog){
   if (map.echeanceTenue){   // cochée au passage en Terminé, décochée si la tâche en sort ou si la date change
     changes = {...changes};
     if ('statut' in changes && !('echeanceTenue' in changes)){
-      const was = STATUT_TERMINE.includes(card.statut), now = STATUT_TERMINE.includes(changes.statut);
-      if (now && !was) changes.echeanceTenue = true; else if (!now && was) changes.echeanceTenue = false;
+      if (changes.statut==='Terminé') changes.echeanceTenue = true;
+      else if (isStatutClos(card.statut) && !isStatutClos(changes.statut)) changes.echeanceTenue = false;
     }
     if ('echeance' in changes && (card.echeance??null)!==(changes.echeance??null)) changes.echeanceTenue = false;
   }
@@ -875,16 +878,13 @@ function askConfirm(msg, okLabel){   // confirmation dans la page : les fenêtre
 }
 const refuse = msg => { flash(msg); renderMenu(); return false; };
 async function setEspace(card, v){
-  const toHP = norm(v)===norm(ESP_HP), hasResp = map.responsables && refIds(card.responsables).length>0;
+  const toHP = norm(v)!==norm(ESP_PROJET), hasResp = map.responsables && refIds(card.responsables).length>0;
   const changes = {espace:v}, encoded = {};
   if (toHP){
+    if (map.responsables && !hasResp) return refuse(`Choisissez d'abord un membre : une tâche sans membre ne peut pas passer en ${ESP_HP}.`);
     if (hasResp && !amResp(card)){
       if (!canSeeOthers()) return refuse("Seules les personnes responsables de la tâche ou le manager peuvent la passer en Restreint.");
       if (!await askConfirm(`« ${card.titre||'Cette tâche'} » ne sera plus visible que par ses responsables et le manager.`, 'Passer en Restreint')) return false;
-    }
-    if (map.responsables && !hasResp){   // sans responsable, elle ne serait visible de personne : elle revient à son créateur, à défaut à la personne qui la déplace
-      const n = who(g(card,'creePar')), pp = team.find(t=>t.label===n) || meObj();
-      if (pp){ const list = isListRef(); changes.responsables = list ? [pp.id] : pp.id; encoded.responsables = list ? ['L',pp.id] : pp.id; }
     }
     if (map.statut && !g(card,'statut')) changes.statut = STATUT_DEFAUT;
   } else if (isHP(card)){
@@ -1042,7 +1042,7 @@ function fieldMenu(cardId, key, fromPicker){
     let html = `<div class="mh">${fromPicker?'<span class="lnk" data-back style="display:inline;padding:0 6px 0 0">←</span>':''}${f.label}</div>`;
     if (f.kind==='date'){
       const d = toDate(g(c,'echeance')), editable = meta.echeance && meta.echeance.type==='Date';
-      html += editable ? `<div class="row"><input type="date" id="mn-date" value="${d?d.toISOString().slice(0,10):''}"></div>${d&&map.echeanceTenue?`<label class="mi"><input type="checkbox" id="mn-ten" ${g(c,'echeanceTenue')?'checked':''}> Échéance tenue</label>`:''}${d?'<span class="lnk" data-clr>Effacer la date</span>':''}`
+      html += editable ? `<div class="row"><input type="date" id="mn-date" value="${d?d.toISOString().slice(0,10):''}"></div>${d?'<span class="lnk" data-clr>Effacer la date</span>':''}`
                        : `<div class="mh" style="text-transform:none">Modifiable seulement pour une colonne de type « Date » (pas « Date et heure »).</div>`;
     } else if (key==='statut' && !g(c,'statut') && !canEnterSuivi(c) && !isHP(c)){
       html += `<div class="mh" style="text-transform:none;max-width:250px">Une carte ne passe en Suivi que depuis une prio P0 à P3 ou « Relégué ». Définissez d'abord sa prio.</div>`;
@@ -1065,7 +1065,6 @@ function fieldMenu(cardId, key, fromPicker){
         if (!isMulti(key)) closeMenu();
       });
       const dt = el.querySelector('#mn-date'); if (dt) dt.onchange = ()=>{ const v=dt.value, cur=index.get(cardId); if(cur) update(cur,{echeance: v ? Date.UTC(+v.slice(0,4), +v.slice(5,7)-1, +v.slice(8,10))/1000 : null}); };
-      const ten = el.querySelector('#mn-ten'); if (ten) ten.onchange = ()=>{ const cur=index.get(cardId); if(cur) update(cur,{echeanceTenue:ten.checked}); };
       const cl = el.querySelector('[data-clr]'); if (cl) cl.onclick = ()=>{ const cur=index.get(cardId); if(cur) update(cur,{echeance:null}); closeMenu(); };
       const add = ()=>{ const inp = el.querySelector('#mn-new'); const v = inp.value; inp.value=''; const cur=index.get(cardId); if (cur && v.trim()) createAndSet(cur, key, v); };
       const ab = el.querySelector('#mn-add'); if (ab){ ab.onclick = add; el.querySelector('#mn-new').onkeydown = e=>{ if(e.key==='Enter'){ e.preventDefault(); add(); } }; }
@@ -1365,6 +1364,10 @@ function renderHeader(){
 function renderWarn(){
   const parts = [];
   if (map && idNote) parts.push(`<div class="warn"><b>⚠</b> ${esc(idNote)}</div>`);
+  if (map && map.espace){
+    const odd = [...new Set(records.map(r=>r.espace).filter(v=>v && ![norm(ESP_PROJET),norm(ESP_HP)].includes(norm(v))))];
+    if (odd.length) parts.push(`<div class="warn"><b>⚠</b> Valeur d'Espace inattendue : « ${odd.map(esc).join(' », « ')} ». Le widget la traite comme « ${ESP_HP} », mais vos règles d'accès ne la reconnaissent peut-être pas. Corrigez-la dans la colonne Espace et dans les règles.</div>`);
+  }
   if (map && !map.espace) parts.push(`<div class="warn"><b>⚠</b> Associez la colonne <b>Espace</b> dans la configuration du widget : sans elle, les tâches restreintes apparaissent dans le Suivi et le Backlog.</div>`);
   if (map){
     const total = records.length, shown = records.filter(passes).length, inv = records.filter(inView).length;
@@ -1584,7 +1587,7 @@ function propValue(r, f){   // valeurs affichées sous les boutons
   if (f.key==='statut') return g(r,'statut') ? tag(g(r,'statut')) : '';
   if (f.key==='prio' || f.key==='charge') return g(r,f.key) ? tagX(g(r,f.key), f.key) : '';
   if (f.kind==='tags') return L(r,f.key).map(t=>tagX(t,f.key)).join('');
-  if (f.key==='echeance') return toDate(g(r,'echeance')) ? dateBadge(r) : '';
+  if (f.key==='echeance') return toDate(g(r,'echeance')) ? dateBadge(r) + (map.echeanceTenue ? `<label class="ten"><input type="checkbox" id="fp-ten" ${g(r,'echeanceTenue')?'checked':''}> Tenue</label>` : '') : '';
   if (f.key==='responsables'){   // initiales seulement : la place reste la même, quel que soit le nombre de membres
     const names = map.responsables ? refIds(r.responsables).map(id=>teamById[id]||('#'+id)) : L(r,'personnes');
     return names.length ? `<button class="avs" data-anchor="fd-responsables" data-dd="responsables" title="${esc(names.join(', '))}" aria-label="Membres : ${esc(names.join(', '))}. Modifier">${names.map(n=>`<span class="av" title="${esc(n)}">${esc(initials(n))}</span>`).join('')}</button>` : '';
@@ -1735,6 +1738,13 @@ function renderFiche(){
     b.onclick = e=>{ if (e.target.closest('.x')) return; openMenu('fd-'+b.dataset.dd, fieldMenu(id, b.dataset.dd)); };
     if (b.classList.contains('pc')) b.onkeydown = e=>{ if (e.key==='Enter' || e.key===' '){ e.preventDefault(); openMenu('fd-'+b.dataset.dd, fieldMenu(id, b.dataset.dd)); } };
   });
+  const tn = $('fp-ten');
+  if (tn) tn.onchange = ()=>{   // cocher sur une tâche en cours la termine ; sur un statut déjà clos, le statut ne bouge pas
+    const c = cur(); if (!c) return;
+    const ch = {echeanceTenue: tn.checked};
+    if (tn.checked && g(c,'statut') && !isStatutClos(g(c,'statut'))) ch.statut = 'Terminé';
+    update(c, ch);
+  };
   const vt = $('fp-vote'); if (vt) vt.onclick = ()=>castVote(cur());
   const bk = $('fp-back'); if (bk) bk.onclick = ()=>sendBack(cur());
   const tr = $('fp-trash'); if (tr) tr.onclick = ()=>trashTask(cur());
