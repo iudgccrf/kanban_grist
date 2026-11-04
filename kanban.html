@@ -209,8 +209,7 @@
   #ntoast { display:none; position:fixed; z-index:35; bottom:14px; right:10px; width:min(380px,calc(100vw - 20px)); align-items:center; gap:10px; padding:10px 12px; background:#fff1e3; border:2px solid #c2410c; border-radius:8px; box-shadow:0 8px 28px rgba(0,0,0,.3); cursor:pointer; }
   #ntoast .tx { flex:1; min-width:0; line-height:1.35; overflow-wrap:anywhere; }
   .hlflash { background:#fff3c4 !important; outline:2px solid #d9a400; border-radius:6px; }
-  .ten { display:inline-flex; align-items:center; gap:3px; font-size:12px; cursor:pointer; }
-  .ten input { margin:0; accent-color:var(--accent); }
+  input.ten { width:20px; height:20px; margin:0; flex:none; cursor:pointer; accent-color:var(--accent); }
   .cadd { margin-left:2px; width:24px; height:24px; border:1px solid #c9d0ea; border-radius:5px; background:#f4f6ff; color:#2b3a9a; font:inherit; font-size:15px; font-weight:700; line-height:1; cursor:pointer; padding:0; flex:none; }
   .cadd:hover { background:var(--accent-bg); border-color:var(--accent); }
   .csub { margin:-5px 4px 7px; font-size:11px; color:#595959; }
@@ -280,8 +279,23 @@
 <div id="pop"></div>
 
 <script>
+/*
+ * WIDGET KANBAN POUR GRIST
+ * Un fichier unique, sans dépendance ni compilation. Hébergé en page statique, il s'installe comme widget personnalisé avec l'accès complet.
+ *
+ * Trois vues sur la même table : Suivi de projet, Backlog et Mes tâches, plus la corbeille.
+ * Tables lues et écrites : table des tâches (colonnes associées dans la configuration du widget), Equipe, Commentaires,
+ * Historique, Notifications, Mes_tris, Reglages. Les colonnes annexes sont retrouvées par leur nom (voir TABLES).
+ *
+ * Trois principes à garder en tête avant de modifier ce fichier :
+ * 1. Le widget n'est PAS une barrière de sécurité. Ses refus ne sont que du confort : seules les règles d'accès de Grist protègent les données.
+ * 2. Rien de durable ne va dans les options du widget (grist.setOption) : elles restent provisoires tant que la section n'est pas enregistrée.
+ * 3. Ce fichier est public : aucun nom, courriel, jeton ni identifiant de document ne doit y figurer.
+ *
+ * Installation, règles de gestion et arbitrages : voir les quatre documents du widget (guide d'utilisation, guide d'installation, règles de gestion, limites et suite).
+ */
 /* ============ CONFIGURATION ============ */
-const VERSION = '2026-11-04 c';   // affichée dans le bandeau et le diagnostic : permet de vérifier que le bon fichier est chargé
+const VERSION = '2026-11-04 e';   // affichée dans le bandeau et le diagnostic : permet de vérifier que le bon fichier est chargé
 const STATUTS = ['A faire','En cours','Bloqué','A valider','Terminé','Abandonné','Archivé'];
 const PRIOS   = ['P0 Critique','P1 Important','P2 Souhaitable','P3 Appréciable','Nouveau','Relégué','Abandonné','Déjà prévu'];
 const CHARGES = ['XS','S','M','L','XL'];
@@ -387,6 +401,7 @@ const COLS = [
 ];
 
 /* ============ ÉTAT ============ */
+// État en mémoire de la page. Le rendu reconstruit l'interface à partir de cet état : render() pour tout, renderBoard(), renderFiche(), renderNotifs() pour une partie.
 const $ = id => document.getElementById(id);
 let mode = lsGet('mode','suivi');   // suivi | backlog | perso | corbeille : propre à ce navigateur
 let docKey = '';               // identifiant du document
@@ -419,6 +434,7 @@ let team = [], teamById = {}, teamCol = null, teamTable = null;
 let attMeta = {};              // id de pièce jointe -> {name, size}
 const mkSide = ()=>({rows:[], ok:null, note:'', tick:0, sig:'', cols:null, fill:new Set()});
 const side = {comments: mkSide(), history: mkSide(), notifs: mkSide(), tris: mkSide()};
+let tenueUnmapped = false;     // la colonne existe, mais le champ n'est pas associé
 let choiceColors = {};         // valeur -> [fond, texte], depuis les choix des colonnes Grist   // tables annexes
 let histNote = '';
 let flashNote = '', flashTimer = null;   // message d'erreur visible dans la page
@@ -567,6 +583,9 @@ function valLabel(card, k, v){   // valeur lisible d'un champ (pour le journal)
 }
 
 /* ============ MÉTADONNÉES DES COLONNES ============ */
+// Lit le type et les choix des colonnes dans les tables internes de Grist, ainsi que la table Equipe.
+// IDENTITÉ : un widget n'a pas accès à l'utilisateur connecté. Une règle d'accès rend la colonne Est_moi lisible seulement sur la ligne de la personne :
+// la seule cellule à True désigne donc le compte courant, sans déclaration possible ni écriture. Plusieurs cellules à True signalent une règle mal posée, et on refuse de choisir.
 async function loadMeta(){
   choiceColors = {}; meta = {}; team = []; teamById = {}; teamCol = null; teamTable = null; metaNote = ''; moiId = null; moi = ''; idNote = '';
   try {
@@ -576,6 +595,7 @@ async function loadMeta(){
     const colById = {}; C.id.forEach((id,i)=>{ colById[id] = C.colId[i]; });
     const cols = {};
     C.id.forEach((id,i)=>{ if (C.parentId[i]===ti) cols[C.colId[i]] = {type:C.type[i], wo:C.widgetOptions[i], vis:C.visibleCol[i]}; });
+    tenueUnmapped = !map.echeanceTenue && Object.keys(cols).some(c=>/^echeance_?tenue$/.test(norm(c)));
     for (const k in map){
       const c = map[k]; if (!c || c[0]==='@' || !cols[c]) continue;
       let woObj = {}; try { woObj = JSON.parse(cols[c].wo||'{}') || {}; } catch(e){}
@@ -637,6 +657,8 @@ async function loadAttachMeta(){
 }
 
 /* ============ COMMENTAIRES (table séparée) ============ */
+// Tables annexes, relues toutes les SIDE_POLL_MS tant que la page est visible : Grist ne prévient le widget que pour sa propre table.
+// Auteur, courriel et date sont posés de préférence par des formules d'initialisation de Grist, plus fiables que le navigateur.
 function fillBlanks(kind, t, c){   // complète auteur / courriel / date si la formule de Grist ne l'a pas fait
   const S = side[kind], me = meObj(), ups = [];
   S.fill.forEach(rid=>{
@@ -774,6 +796,8 @@ function mentionHtml(text){
 }
 
 /* ============ ÉCRITURE DANS GRIST ============ */
+// update() : affichage immédiat, écriture, journal, notifications. Une modification et son journal partent dans une seule action.
+// Les notifications partent à part : un refus sur leur table ne doit jamais annuler le travail de l'utilisateur.
 // Met à jour la carte tout de suite à l'écran (optimiste), puis écrit dans Grist.
 // changes : {cléWidget: valeur affichée} ; encoded : {cléWidget: valeur envoyée à Grist} (listes : ['L', ...])
 async function update(card, changes, encoded, extraLog){
@@ -856,6 +880,8 @@ async function actRes(actions, quiet){
 async function act(actions){ return !!(await actRes(actions)); }
 
 /* ============ VALEURS D'UN CHAMP (carte, fiche, filtres) ============ */
+// setField() et setEspace() portent les règles de gestion sur les membres et l'Espace : ne les contourner dans aucun bouton.
+// Détail des règles et de leurs raisons : document « Règles de gestion ».
 const fieldOn = f => map && (f.key==='responsables' ? (map.responsables || map.personnes) : map[f.key]);
 function optionsFor(key){   // [{v, label}]
   if (key==='responsables') return team.map(t=>({v:t.id, label:t.label}));
@@ -1091,6 +1117,8 @@ function filterOptions(f){
 }
 
 /* ============ GÉRER LES VALEURS (ajouter / renommer / supprimer) ============ */
+// Les valeurs et leurs couleurs vivent dans les choix des colonnes Grist : elles survivent aux rechargements, et leur modification exige le droit de structure.
+// Renommer ou supprimer part de la table entière, pas des lignes reçues : un filtre de section ne doit pas laisser de cartes non mises à jour. Tout tient dans une seule action.
 function manageKeys(){ return FIELDS.filter(f=>f.kind!=='date' && f.key!=='espace' && fieldOn(f) && (f.key!=='responsables' || (map.responsables && teamTable))); }
 function openManage(key){ manage = {key: key==='personnes' ? 'responsables' : key, confirm:null, msg:''}; closeMenu(); renderManage(); }
 function closeManage(){ manage = null; $('modal').style.display='none'; }
@@ -1215,6 +1243,8 @@ function moveColumn(from, to){
 }
 
 /* ============ TRI DES CARTES (dans chaque colonne) ============ */
+// Trois niveaux, du plus fort au plus faible : tri personnalisé (ce navigateur), ordre manuel (Mes tâches, table Mes_tris), tri par défaut Échéance > Prio > Charge.
+// Pour les statuts finis, l'échéance la plus récente passe en haut. Sans date : toujours en bas.
 const SORTS = [['prio','Prio'],['echeance','Échéance'],['charge','Charge']];
 const customSort = () => sortPref.filter(s=>s && s.k && map[s.k]);
 const canManualHere = () => mode==='perso' && groupKey()==='statut' && !persoFor && !!meObj() && side.tris.ok===true;
@@ -1368,6 +1398,7 @@ function renderWarn(){
     const odd = [...new Set(records.map(r=>r.espace).filter(v=>v && ![norm(ESP_PROJET),norm(ESP_HP)].includes(norm(v))))];
     if (odd.length) parts.push(`<div class="warn"><b>⚠</b> Valeur d'Espace inattendue : « ${odd.map(esc).join(' », « ')} ». Le widget la traite comme « ${ESP_HP} », mais vos règles d'accès ne la reconnaissent peut-être pas. Corrigez-la dans la colonne Espace et dans les règles.</div>`);
   }
+  if (map && tenueUnmapped) parts.push(`<div class="warn"><b>⚠</b> Associez le champ <b>Échéance tenue</b> à la colonne Echeance_tenue dans la configuration du widget, sinon la coche ne s'enregistre pas.</div>`);
   if (map && !map.espace) parts.push(`<div class="warn"><b>⚠</b> Associez la colonne <b>Espace</b> dans la configuration du widget : sans elle, les tâches restreintes apparaissent dans le Suivi et le Backlog.</div>`);
   if (map){
     const total = records.length, shown = records.filter(passes).length, inv = records.filter(inView).length;
@@ -1429,7 +1460,7 @@ window.addEventListener('dragover', e=>{ if (e.dataTransfer && [...(e.dataTransf
 window.addEventListener('drop', e=>{ if (e.dataTransfer && [...(e.dataTransfer.types||[])].includes('Files')) e.preventDefault(); });
 
 /* ============ RENDU : cartes et colonnes ============ */
-function dateBadge(r){
+function dateBadge(r, long){
   const d = toDate(g(r,'echeance')); if(!d) return '';
   const statut = g(r,'statut') || '';
   let cls = 'd-grey';
@@ -1438,7 +1469,7 @@ function dateBadge(r){
     const diff = Math.round((dayStart(d)-dayStart(new Date()))/86400000);
     if (diff <= thr.red) cls = 'd-red'; else if (diff <= thr.orange) cls = 'd-orange';
   }
-  return `<span class="date ${cls}">${fmtDate(d)}${cls==='d-ok'?' ✔':''}</span>`;
+  return `<span class="date ${cls}">${long ? d.toLocaleDateString('fr-FR',{day:'numeric',month:'long'}) : fmtDate(d)}${cls==='d-ok'?' ✔':''}</span>`;
 }
 function cardHtml(r){
   let tags = '';
@@ -1544,6 +1575,8 @@ function openNewPop(group){
 }
 
 /* ============ PIÈCES JOINTES ============ */
+// Grist n'offre pas d'envoi de fichier dans l'API des widgets. Le jeton court demandé à Grist permet d'appeler l'API REST, puis on rattache les identifiants reçus à la ligne.
+// La liste est relue juste avant l'écriture, car un collègue a pu ajouter un fichier entre-temps.
 async function uploadFiles(cardId, files){
   files = [...(files||[])]; if (!files.length || uploadNote) return;
   uploadNote = files.length>1 ? `Envoi de ${files.length} fichiers…` : `Envoi de « ${files[0].name} »…`; refreshFiche();
@@ -1587,7 +1620,7 @@ function propValue(r, f){   // valeurs affichées sous les boutons
   if (f.key==='statut') return g(r,'statut') ? tag(g(r,'statut')) : '';
   if (f.key==='prio' || f.key==='charge') return g(r,f.key) ? tagX(g(r,f.key), f.key) : '';
   if (f.kind==='tags') return L(r,f.key).map(t=>tagX(t,f.key)).join('');
-  if (f.key==='echeance') return toDate(g(r,'echeance')) ? dateBadge(r) + (map.echeanceTenue ? `<label class="ten"><input type="checkbox" id="fp-ten" ${g(r,'echeanceTenue')?'checked':''}> Tenue</label>` : '') : '';
+  if (f.key==='echeance') return toDate(g(r,'echeance')) ? `<input type="checkbox" class="ten" id="fp-ten" aria-label="Échéance tenue" title="Échéance tenue" ${g(r,'echeanceTenue')?'checked':''}>` + dateBadge(r, true) : '';
   if (f.key==='responsables'){   // initiales seulement : la place reste la même, quel que soit le nombre de membres
     const names = map.responsables ? refIds(r.responsables).map(id=>teamById[id]||('#'+id)) : L(r,'personnes');
     return names.length ? `<button class="avs" data-anchor="fd-responsables" data-dd="responsables" title="${esc(names.join(', '))}" aria-label="Membres : ${esc(names.join(', '))}. Modifier">${names.map(n=>`<span class="av" title="${esc(n)}">${esc(initials(n))}</span>`).join('')}</button>` : '';
@@ -1741,6 +1774,7 @@ function renderFiche(){
   const tn = $('fp-ten');
   if (tn) tn.onchange = ()=>{   // cocher sur une tâche en cours la termine ; sur un statut déjà clos, le statut ne bouge pas
     const c = cur(); if (!c) return;
+    if (!map.echeanceTenue){ tn.checked = false; flash("Pour cocher une échéance, associez le champ « Échéance tenue » à la colonne Echeance_tenue dans la configuration du widget."); return; }
     const ch = {echeanceTenue: tn.checked};
     if (tn.checked && g(c,'statut') && !isStatutClos(g(c,'statut'))) ch.statut = 'Terminé';
     update(c, ch);
@@ -1819,6 +1853,9 @@ function renderFiche(){
 }
 
 /* ============ NOTIFICATIONS ============ */
+// Écrites par le navigateur de l'auteur de l'action : aucun serveur ne tourne derrière le widget. Une action faite directement dans un tableau Grist n'en crée donc aucune.
+// Pas de courriel : ni webhook ni automatisation n'est disponible sur l'instance actuelle.
+// « Pour moi » compte dans la cloche ; « Activité » est regroupée par tâche, sans badge. Les échéances sont calculées à l'affichage et leur état « lu » reste dans le navigateur.
 async function loadNotifs(){
   const T = TABLES.notifs, S = side.notifs; let sig = '';
   try {
@@ -2045,6 +2082,7 @@ document.addEventListener('keydown', e=>{
 });
 
 /* ============ GRIST ============ */
+// expandRefs:false : par défaut, Grist renvoie le texte affiché des références, alors que le widget a besoin des identifiants de lignes.
 grist.ready({ columns: COLS, requiredAccess: 'full', allowSelectBy: true });
 grist.onOptions(o=>{
   // La vue active et le regroupement sont propres à chaque navigateur ; les anciens réglages partagés servent seulement de valeur de départ.
