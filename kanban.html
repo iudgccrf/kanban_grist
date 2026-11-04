@@ -209,6 +209,12 @@
   #ntoast { display:none; position:fixed; z-index:35; bottom:14px; right:10px; width:min(380px,calc(100vw - 20px)); align-items:center; gap:10px; padding:10px 12px; background:#fff1e3; border:2px solid #c2410c; border-radius:8px; box-shadow:0 8px 28px rgba(0,0,0,.3); cursor:pointer; }
   #ntoast .tx { flex:1; min-width:0; line-height:1.35; overflow-wrap:anywhere; }
   .hlflash { background:#fff3c4 !important; outline:2px solid #d9a400; border-radius:6px; }
+  .cadd { margin-left:2px; width:24px; height:24px; border:1px solid #c9d0ea; border-radius:5px; background:#f4f6ff; color:#2b3a9a; font:inherit; font-size:15px; font-weight:700; line-height:1; cursor:pointer; padding:0; flex:none; }
+  .cadd:hover { background:var(--accent-bg); border-color:var(--accent); }
+  .csub { margin:-5px 4px 7px; font-size:11px; color:#595959; }
+  .lnkc { border:0; background:none; padding:0; font:inherit; color:#2b3a9a; text-decoration:underline; cursor:pointer; }
+  header .sortc { background:#fff4d6; border-color:#b7791f; color:#6b4400; font-weight:700; }
+  #modal input[type=color] { flex:none; width:32px; height:28px; padding:0; border:1px solid #ccc; border-radius:4px; background:none; cursor:pointer; }
   .hpill { border:0; border-radius:3px; background:#4b2e83; color:#fff; font:inherit; font-size:11px; font-weight:700; padding:2px 6px; cursor:pointer; white-space:nowrap; }
   .avatars { border:0; background:none; padding:0 0 0 6px; cursor:pointer; font:inherit; }
   .avatars:hover .av, .avatars:focus-visible .av { box-shadow:0 0 0 2px var(--accent); }
@@ -273,7 +279,7 @@
 
 <script>
 /* ============ CONFIGURATION ============ */
-const VERSION = '2026-11-03 l';   // affichée dans le bandeau et le diagnostic : permet de vérifier que le bon fichier est chargé
+const VERSION = '2026-11-04 a';   // affichée dans le bandeau et le diagnostic : permet de vérifier que le bon fichier est chargé
 const STATUTS = ['A faire','En cours','Bloqué','A valider','Terminé','Abandonné','Archivé'];
 const PRIOS   = ['P0 Critique','P1 Important','P2 Souhaitable','P3 Appréciable','Nouveau','Relégué','Abandonné','Déjà prévu'];
 const CHARGES = ['XS','S','M','L','XL'];
@@ -287,21 +293,29 @@ const PRIO_RELEGUE = 'Relégué', PRIO_NOUVEAU = 'Nouveau';
 const GROUP_LABELS = {statut:'Statut', prio:'Prio', charge:'Charge'};
 const PALETTE = [['#fdf1c4','#6b5a10'],['#fcd9d9','#8a2b2b'],['#d6eef7','#1f5f78'],['#dcebd9','#355a2f'],
                  ['#e8dcf5','#59397a'],['#ffe2c9','#8a4a12'],['#d9ecec','#245f5f'],['#ffd9e8','#8a2b55']];
-const PRIO_TAG = [[/^P0/,['#fcd9d9','#b3202f']],[/^P1/,['#fff0c2','#8a5a00']],[/^P2/,['#d6eef7','#1f5f78']],[/^P3/,['#dde6f2','#3b5a80']]];
+const PRIO_TAG = [[/^P0/,['#fbd5da','#b3202f']],[/^P1/,['#fdf0c8','#8a5a00']],[/^P2/,['#eef3c9','#55601a']],[/^P3/,['#dcf0f8','#1f5f78']]];
 
 // Tables annexes (à créer dans Grist, voir le guide). Le widget retrouve les colonnes par leur nom (accents et majuscules ignorés).
 const TABLES = {
   comments: {table:'Commentaires', pick:{task:/^tache/, parent:/^parent/, text:/^(texte|text|message|commentaire)/, author:/^(auteur|created_?by|cree_?par|qui)/, date:/^(date|created_?at|cree_?le|horodat|quand)/, email:/(courriel|couriel|e_?mail|^mail)/, mentions:/^mention/}},
   history:  {table:'Historique',   pick:{task:/^tache/, event:/^(evenement|event|champ|type)/, before:/^(avant|ancien)/, after:/^(apres|nouveau|nouvelle)/, author:/^(auteur|created_?by|cree_?par|qui)/, date:/^(date|created_?at|cree_?le|horodat|quand)/, email:/(courriel|couriel|e_?mail|^mail)/}},
+  tris:     {table:'Mes_tris', pick:{person:/^personne/, task:/^tache/, col:/^colonne/, ord:/^ordre/}},
   notifs:   {table:'Notifications', pick:{recipient:/^destinataire/, type:/^type/, task:/^tache/, comment:/^commentaire/, author:/^(auteur|created_?by|cree_?par)/, text:/^(texte|message)/, date:/^(cree_?le|created_?at|date)/, read:/^lu$/}},
 };
-const ESP_PROJET = 'Projet', ESP_HP = 'Hors projet';
+const ESP_PROJET = 'Projet', ESP_HP = 'Restreint';
+const FIELD_PREFIX = {prio:'1.', charge:'2.', produit:'3.', themes:'4.', etiquettes:'5.', personas:'A.', sources:'B.'};   // ajoutés à l'affichage seulement : les données restent sans préfixe
+const STATUTS_FINIS = ['Terminé','Abandonné','Archivé'];   // échéance la plus récente en haut
+// Couleurs de départ, tant qu'aucune couleur n'est définie dans les choix de la colonne Grist
+const DEFAULT_COLORS = {'XS':['#c9f2f2','#0a6f76'],'S':['#d5e2e6','#3b5560'],'M':['#fdf6d3','#6b5a10'],'L':['#fde0e0','#8a2b2b'],'XL':['#fbd5da','#b01a30'],
+  'Parcours utilisateur':['#dcf0f8','#1f5f78'],'Exploitation de la donnée':['#fdf6d3','#6b5a10'],'KPI':['#ffe6cc','#9a4f00'],'KPI & cookies data':['#ffe6cc','#9a4f00'],'IA':['#ffdce6','#a8124e'],
+  'GT':['#dfe2e6','#3f4650'],'Présentation':['#dcf0f8','#1f5f78'],'Gestion de projet':['#dde6dd','#355a2f'],'RH':['#d5e0ea','#2c4a66']};
 const GROUP_MS = 5*60*1000;      // modifications regroupées dans la cloche
 // Icônes des notifications : chaque type a sa forme et sa couleur (la couleur ne porte jamais seule le sens)
 const SVG = p => `<svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">${p}</svg>`;
 const NOTIF_TYPES = {
   mention:      {label:'Mention',           bg:'#e3e8fb', fg:'#2b3a9a', icon:'<b>@</b>'},
   assignation:  {label:'NOUVELLE ASSIGNATION', bg:'#c2410c', fg:'#fff', icon:SVG('<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M19 8v6M16 11h6"/>')},
+  activite:     {label:'Activité',          bg:'#eef0f4', fg:'#444', icon:SVG('<path d="M3 12h4l3 8 4-16 3 8h4"/>')},
   modification: {label:'Modification',      bg:'#e6e8ec', fg:'#333', icon:SVG('<path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/>')},
   reponse:      {label:'Réponse',           bg:'#d6eef7', fg:'#1f5f78', icon:SVG('<path d="m9 17-5-5 5-5"/><path d="M20 18v-2a4 4 0 0 0-4-4H4"/>')},
   commentaire:  {label:'Commentaire',       bg:'#d9ecec', fg:'#245f5f', icon:SVG('<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2Z"/>')},
@@ -310,7 +324,7 @@ const NOTIF_TYPES = {
 };
 const SIDE_POLL_MS = 15000;
 const HIST_KEYS = {espace:'Espace', statut:'Statut', prio:'Prio', charge:'Charge', echeance:'Échéance', responsables:'Responsables'};   // champs dont les changements sont journalisés
-const NOTIF_SKIP = ['votes','votants','commentaires','creePar','creeLe','modifPar','modifLe','supprimee','personnes'];   // champs qui ne déclenchent pas de notification
+const NOTIF_SKIP = ['echeanceTenue','votes','votants','commentaires','creePar','creeLe','modifPar','modifLe','supprimee','personnes'];   // champs qui ne déclenchent pas de notification
 const CARD_KEYS = ['statut','prio','charge','responsables','espace'];       // champs modifiables avec le bouton ＋ des cartes
 const STATUT_DEFAUT = 'A faire';
 
@@ -343,7 +357,7 @@ const FILTERS = [   // dans l'ordre d'affichage de la barre du haut
 
 const COLS = [
   {name:'titre',        title:'Titre de la tâche',                    type:'Text'},
-  {name:'espace',       title:'Espace (Projet / Hors projet)',        type:'Choice', optional:true},
+  {name:'espace',       title:'Espace (Projet / Restreint)',        type:'Choice', optional:true},
   {name:'statut',       title:'Statut (colonnes du Suivi)',           type:'Choice'},
   {name:'prio',         title:'Priorité (colonnes du Backlog)',       type:'Choice'},
   {name:'charge',       title:'Charge (XS…XL)',                       type:'Choice', optional:true},
@@ -355,6 +369,7 @@ const COLS = [
   {name:'responsables', title:'Responsables (colonne de RÉFÉRENCE vers Equipe)', type:'Ref,RefList', optional:true},
   {name:'personnes',    title:'Responsables (colonne texte, si pas de référence)', type:'Text,ChoiceList', optional:true},
   {name:'echeance',     title:"Date d'échéance",                      type:'Date,DateTime', optional:true},
+  {name:'echeanceTenue', title:'Échéance tenue (colonne Bascule)',    type:'Bool', optional:true},
   {name:'description',  title:'Description (colonne Texte)',          type:'Text', optional:true},
   {name:'checklist',    title:'Checklist (colonne Texte)',            type:'Text', optional:true},
   {name:'pj',           title:'Pièces jointes',                       type:'Attachments', optional:true},
@@ -375,7 +390,7 @@ let docKey = '';               // identifiant du document
 let moi = '', moiId = null;    // identité donnée par le serveur Grist (colonne Est_moi de Equipe), jamais déclarée
 let idNote = '';               // pourquoi l'identité est inconnue
 let persoFor = '';             // Mes tâches : '' = moi, '*' = tout le monde, sinon nom d'une personne
-let notifOpen = false, notifFilter = 'all', notifSeen = [], toastShown = new Set(), toastTimer = null;
+let notifOpen = false, notifFilter = 'all', notifTab = 'me', notifSeen = [], toastShown = new Set(), toastTimer = null;
 let ficheFocus = null;         // élément à mettre en évidence dans la fiche : {sel, scrolled, until}
 let uploadNote = '';           // envoi de pièces jointes en cours
 let delcId = null;             // commentaire dont la suppression attend confirmation
@@ -390,6 +405,7 @@ let records = [];              // lignes converties (noms du widget)
 let index = new Map();         // id -> enregistrement
 let pending = new Map();       // id -> {changes, t} : modifications en cours d'enregistrement (évite les effets de retour en arrière)
 let colors = {groups:{}, tags:{}};
+let regHas = {};               // réglages déjà présents dans la table Reglages
 let colOrder = {};             // ordre des colonnes du Kanban, par mode
 let thr = {orange:3, red:1};
 let panelOpen = false;
@@ -399,7 +415,8 @@ let metaTick = 0, metaSig = '', meta = {}, metaNote = '';
 let team = [], teamById = {}, teamCol = null, teamTable = null;
 let attMeta = {};              // id de pièce jointe -> {name, size}
 const mkSide = ()=>({rows:[], ok:null, note:'', tick:0, sig:'', cols:null, fill:new Set()});
-const side = {comments: mkSide(), history: mkSide(), notifs: mkSide()};   // tables annexes
+const side = {comments: mkSide(), history: mkSide(), notifs: mkSide(), tris: mkSide()};
+let choiceColors = {};         // valeur -> [fond, texte], depuis les choix des colonnes Grist   // tables annexes
 let histNote = '';
 let flashNote = '', flashTimer = null;   // message d'erreur visible dans la page
 function flash(msg){ flashNote = msg; clearTimeout(flashTimer); flashTimer = setTimeout(()=>{ flashNote = ''; renderWarn(); }, 25000); renderWarn(); }
@@ -448,7 +465,7 @@ function refIds(v){   // identifiants de lignes d'une colonne Référence / List
   }).filter(x=>typeof x==='number' && x>0);
 }
 function g(r,k){ return map && map[k] ? r[k] : undefined; }
-const isHP = r => !!(map && map.espace && norm(r && r.espace)===norm(ESP_HP));              // tâche hors projet
+const isHP = r => !!(map && map.espace && ['restreint','hors projet'].includes(norm(r && r.espace)));              // tâche restreinte
 const isDel = r => !!(map && map.supprimee && r && r.supprimee);                        // tâche à la corbeille
 const prioEff = r => g(r,'prio') || (mode==='backlog' ? PRIO_NOUVEAU : '');           // Backlog : une prio vide compte comme « Nouveau"
 // valeurs d'une fiche pour un champ, sous forme de liste de textes
@@ -468,12 +485,19 @@ function defaultTagColors(label,kind){
   return PALETTE[hash(label)%PALETTE.length];
 }
 function tagColors(label,kind){
+  if (choiceColors[label]) return choiceColors[label];
   if (colors.tags[label]) return [lighten(colors.tags[label],.8), darken(colors.tags[label],.45)];
+  if (DEFAULT_COLORS[label]) return DEFAULT_COLORS[label];
   return defaultTagColors(label,kind);
 }
-function tag(label, kind){ const c = tagColors(label,kind); return `<span class="tag" style="background:${c[0]};color:${c[1]}">${esc(label)}</span>`; }
-function tagX(label, key){
-  return tag(label, key==='prio'?'prio':'').replace(/<\/span>$/, `<span class="x" data-rm="${key}" data-val="${esc(label)}" title="Retirer">×</span></span>`);
+function shownVal(key, label, short){   // texte d'un tag : préfixe du champ, et forme courte de la prio sur les cartes
+  let t = String(label);
+  if (short && key==='prio'){ const m = t.match(/^P[0-3]\b/); t = m ? m[0] : (t.length>16 ? t.slice(0,15)+'…' : t); }
+  return (FIELD_PREFIX[key] && !/^[0-9A-Z]\./.test(t) ? FIELD_PREFIX[key] : '') + t;
+}
+function tag(label, kind, text){ const c = tagColors(label,kind); return `<span class="tag" style="background:${c[0]};color:${c[1]}">${esc(text==null?label:text)}</span>`; }
+function tagX(label, key, short){
+  return tag(label, key==='prio'?'prio':'', shownVal(key,label,short)).replace(/<\/span>$/, `<span class="x" data-rm="${key}" data-val="${esc(label)}" title="Retirer">×</span></span>`);
 }
 function toDate(v){
   if (v == null || v === '') return null;
@@ -541,7 +565,7 @@ function valLabel(card, k, v){   // valeur lisible d'un champ (pour le journal)
 
 /* ============ MÉTADONNÉES DES COLONNES ============ */
 async function loadMeta(){
-  meta = {}; team = []; teamById = {}; teamCol = null; teamTable = null; metaNote = ''; moiId = null; moi = ''; idNote = '';
+  choiceColors = {}; meta = {}; team = []; teamById = {}; teamCol = null; teamTable = null; metaNote = ''; moiId = null; moi = ''; idNote = '';
   try {
     const T = await grist.docApi.fetchTable('_grist_Tables');
     const C = await grist.docApi.fetchTable('_grist_Tables_column');
@@ -553,6 +577,8 @@ async function loadMeta(){
       const c = map[k]; if (!c || c[0]==='@' || !cols[c]) continue;
       let woObj = {}; try { woObj = JSON.parse(cols[c].wo||'{}') || {}; } catch(e){}
       const m = String(cols[c].type).match(/^Ref(?:List)?:(.+)$/);
+      const co = woObj.choiceOptions||{};
+      for (const v in co) if (co[v] && co[v].fillColor) choiceColors[v] = [co[v].fillColor, co[v].textColor || darken(co[v].fillColor,.6)];
       meta[k] = {col:c, type:String(cols[c].type), woObj, choices:(woObj.choices||[]).map(String), ref: m ? m[1] : null, visCol: cols[c].vis ? colById[cols[c].vis] : null};
     }
     if (meta.responsables && meta.responsables.ref){
@@ -640,7 +666,60 @@ async function loadTable(kind, again){
   } catch(e){ S.rows = []; S.cols = null; S.ok = false; S.note = ((e&&e.message)||String(e)); sig = 'ko:'+S.note; }
   if (sig !== S.sig){ S.sig = sig; S.tick++; render(); }
 }
-const loadSide = () => Promise.all([loadTable('comments'), loadTable('history'), loadNotifs()]);
+const loadSide = () => Promise.all([loadTable('comments'), loadTable('history'), loadNotifs(), loadTris(), loadReglages()]);
+/* Réglages communs : écrits tout de suite dans le document. Les options de widget resteraient provisoires tant que la section n'est pas enregistrée. */
+let regRows = {}, regSig = '', regOk = null;
+async function loadReglages(){
+  let sig = '';
+  try {
+    const t = await grist.docApi.fetchTable('Reglages'), rows = {};
+    (t.id||[]).forEach((id,i)=>{ let v = null; try { v = JSON.parse(t.Valeur[i]); } catch(e){} rows[t.Cle[i]] = {id, v}; });
+    regRows = rows; regOk = true; sig = JSON.stringify(rows);
+    regHas = {};
+    if (rows.order){ colOrder = rows.order.v||{}; regHas.order = true; }
+    if (rows.orange){ thr.orange = Number(rows.orange.v); regHas.orange = true; }
+    if (rows.red){ thr.red = Number(rows.red.v); regHas.red = true; }
+  } catch(e){ regOk = false; sig = 'ko'; }
+  if (sig!==regSig){ regSig = sig; render(); }
+}
+async function saveReglage(key, value){
+  const j = JSON.stringify(value), row = regRows[key];
+  try {
+    await grist.docApi.applyUserActions([row ? ['UpdateRecord','Reglages',row.id,{Valeur:j}] : ['AddRecord','Reglages',null,{Cle:key,Valeur:j}]]);
+    regSig = ''; await loadReglages(); return true;
+  } catch(e){
+    flash(regOk===false ? "Table « Reglages » introuvable : le réglage n'est pas enregistré." : "Ce réglage est réservé aux administrateurs du document.");
+    regSig = ''; await loadReglages(); render(); return false;
+  }
+}
+/* Mes tâches : ordre manuel propre à chaque personne */
+async function loadTris(){
+  const S = side.tris, T = TABLES.tris; let sig = '';
+  try {
+    const t = await grist.docApi.fetchTable(T.table), c = resolveCols(t, T.pick);
+    if (!c.person || !c.col || !c.ord) throw new Error('colonnes Personne, Colonne et Ordre requises');
+    S.cols = c;
+    S.rows = (t.id||[]).map((id,i)=>({id, person: refIds(t[c.person][i])[0]||0, task: c.task ? (refIds(t[c.task][i])[0]||0) : 0, col: String(t[c.col][i] ?? ''), ord: Number(t[c.ord][i])||0}));
+    S.ok = true; S.note = S.rows.length+' ligne(s)'; sig = JSON.stringify(S.rows);
+  } catch(e){ S.rows = []; S.cols = null; S.ok = false; S.note = (e&&e.message)||String(e); sig = 'ko:'+S.note; }
+  if (sig!==S.sig){ S.sig = sig; render(); }
+}
+const myTris = () => side.tris.rows.filter(r=>r.person===moiId);
+const manualCol = col => myTris().filter(r=>r.task && r.col===col);
+async function writeTris(removeIds, adds){
+  const c = side.tris.cols, m = meObj(); if (!c || !m) return;
+  const acts = [];
+  if (removeIds.length) acts.push(['BulkRemoveRecord', TABLES.tris.table, removeIds]);
+  adds.forEach(a=>{ const f = {[c.person]: m.id, [c.col]: a.col, [c.ord]: a.ord}; if (a.task && c.task) f[c.task] = a.task; acts.push(['AddRecord', TABLES.tris.table, null, f]); });
+  try { if (acts.length) await grist.docApi.applyUserActions(acts); } catch(e){ flash("Votre ordre n'a pas pu être enregistré : "+((e&&e.message)||e)); }
+  side.tris.sig = ''; await loadTris();
+}
+function saveManual(col, ids){
+  const rm = myTris().filter(r=>r.task && (r.col===col || ids.includes(r.task))).map(r=>r.id);
+  return writeTris(rm, ids.map((task,i)=>({task, col, ord:i+1})));
+}
+const resetManual = col => writeTris(manualCol(col).map(r=>r.id), []);
+const saveMyColumns = names => writeTris(myTris().filter(r=>!r.task).map(r=>r.id), names.map((col,i)=>({task:0, col, ord:i+1})));
 function histActions(entries){
   const c = side.history.cols; if (!c || !c.task) return [];
   return entries.map(e=>{ const f = {[c.task]: e.taskId};
@@ -657,7 +736,7 @@ async function addComment(taskId, parentId, text){
   if (parentId && c.parent) f[c.parent] = parentId;
   const ids = team.filter(p=>text.includes('@'+p.label)).map(p=>p.id);
   const card0 = index.get(taskId), outside = card0 ? team.filter(p=>ids.includes(p.id) && !canAccess(card0,p)) : [];
-  if (outside.length){ flash(`${outside.map(p=>p.label).join(', ')} n'a pas accès à cette tâche hors projet. Ajoutez d'abord la personne comme co-responsable : votre commentaire n'a pas été publié.`); return false; }
+  if (outside.length){ flash(`${outside.map(p=>p.label).join(', ')} n'a pas accès à cette tâche restreinte. Ajoutez d'abord la personne comme co-responsable : votre commentaire n'a pas été publié.`); return false; }
   if (ids.length && c.mentions) f[c.mentions] = ['L', ...ids];
   const res = await actRes([['AddRecord', TABLES.comments.table, null, f]]);
   if (!res) return false;
@@ -695,6 +774,14 @@ function mentionHtml(text){
 // Met à jour la carte tout de suite à l'écran (optimiste), puis écrit dans Grist.
 // changes : {cléWidget: valeur affichée} ; encoded : {cléWidget: valeur envoyée à Grist} (listes : ['L', ...])
 async function update(card, changes, encoded, extraLog){
+  if (map.echeanceTenue){   // cochée au passage en Terminé, décochée si la tâche en sort ou si la date change
+    changes = {...changes};
+    if ('statut' in changes && !('echeanceTenue' in changes)){
+      const was = STATUT_TERMINE.includes(card.statut), now = STATUT_TERMINE.includes(changes.statut);
+      if (now && !was) changes.echeanceTenue = true; else if (!now && was) changes.echeanceTenue = false;
+    }
+    if ('echeance' in changes && (card.echeance??null)!==(changes.echeance??null)) changes.echeanceTenue = false;
+  }
   const cols = {}, applied = {}, log = (extraLog||[]).map(e=>({taskId: card.id, ...e}));
   const respBefore = map.responsables ? refIds(card.responsables) : [], notes = [];
   for (const k in changes){
@@ -716,16 +803,23 @@ async function update(card, changes, encoded, extraLog){
     else { res = await actRes(main); if (res) histNote = "Le journal n'a pas pu être enregistré : vérifiez la table « Historique » (droits, colonnes)."; }
   } else res = await actRes(main);
   if (!res){ pending.delete(card.id); ingest(); return false; }
-  notifyUpdate(card, respBefore, notes.concat(log.map(notePart)));
+  const KEY_EVENTS = ['Statut','Échéance','Suppression','Restauration'];
+  notifyUpdate(card, respBefore, log.filter(e=>KEY_EVENTS.includes(e.event)).map(notePart), notes.concat(log.filter(e=>!KEY_EVENTS.includes(e.event)).map(notePart)));
   verifyWrite(card.id, applied, cols);
   return true;
 }
 const notePart = e => e.event==='Suppression' ? 'Mise à la corbeille' : e.event==='Restauration' ? 'Restaurée depuis la corbeille' : (e.before ? `${e.event} : ${e.before} → ${e.after||'∅'}` : `${e.event} : ${e.after||'∅'}`);
-function notifyUpdate(card, before, parts){
-  if (!map.responsables || !parts.length) return;
-  const after = refIds(card.responsables), detail = parts.join(' · ').slice(0,300), list = [];
-  after.forEach(p=>list.push(before.includes(p) ? {to:p, type:'Modification', taskId:card.id, text:detail} : {to:p, type:'Assignation', taskId:card.id, text:'Responsables : '+after.map(x=>teamById[x]||('#'+x)).join(', ')}));
-  before.filter(p=>!after.includes(p)).forEach(p=>list.push({to:p, type:'Modification', taskId:card.id, text:'Vous avez été retiré(e) des responsables'}));
+function notifyUpdate(card, before, key, other){
+  if (!map.responsables || !(key.length || other.length)) return;
+  const after = refIds(card.responsables), list = [], join = a => a.join(' · ').slice(0,300);
+  after.forEach(p=>{
+    if (!before.includes(p)) list.push({to:p, type:'Assignation', taskId:card.id, text:'Membres : '+after.map(x=>teamById[x]||('#'+x)).join(', ')});
+    else {
+      if (key.length) list.push({to:p, type:'Modification', taskId:card.id, text:join(key)});
+      if (other.length) list.push({to:p, type:'Activité', taskId:card.id, text:join(other)});
+    }
+  });
+  before.filter(p=>!after.includes(p)).forEach(p=>list.push({to:p, type:'Modification', taskId:card.id, text:'Vous avez été retiré(e) de la tâche'}));
   sendNotifs(list);
 }
 /* Contrôle : Grist a-t-il vraiment gardé la modification ? (une formule déclenchée ou une règle peut la remplacer) */
@@ -785,8 +879,8 @@ async function setEspace(card, v){
   const changes = {espace:v}, encoded = {};
   if (toHP){
     if (hasResp && !amResp(card)){
-      if (!canSeeOthers()) return refuse("Seules les personnes responsables de la tâche ou le manager peuvent la passer en hors projet.");
-      if (!await askConfirm(`« ${card.titre||'Cette tâche'} » ne sera plus visible que par ses responsables et le manager.`, 'Passer en hors projet')) return false;
+      if (!canSeeOthers()) return refuse("Seules les personnes responsables de la tâche ou le manager peuvent la passer en Restreint.");
+      if (!await askConfirm(`« ${card.titre||'Cette tâche'} » ne sera plus visible que par ses responsables et le manager.`, 'Passer en Restreint')) return false;
     }
     if (map.responsables && !hasResp){   // sans responsable, elle ne serait visible de personne : elle revient à son créateur, à défaut à la personne qui la déplace
       const n = who(g(card,'creePar')), pp = team.find(t=>t.label===n) || meObj();
@@ -795,11 +889,6 @@ async function setEspace(card, v){
     if (map.statut && !g(card,'statut')) changes.statut = STATUT_DEFAUT;
   } else if (isHP(card)){
     if (!await askConfirm(`« ${card.titre||'Cette tâche'} », ses commentaires et son historique seront visibles par toute l'équipe.`, 'Passer en projet')) return false;
-    const pr = g(card,'prio')||'';
-    if (!(PRIO_GROOMEE.test(pr) || pr===PRIO_RELEGUE)){   // pas assez qualifiée pour le Suivi : retour au Backlog
-      if (map.statut) changes.statut = null;
-      if (map.prio && !pr) changes.prio = PRIO_NOUVEAU;
-    }
   }
   return update(index.get(card.id)||card, changes, encoded);
 }
@@ -808,11 +897,11 @@ async function setField(card, key, v){   // choisit (ou décoche) une valeur
     const list = isListRef(), cur = refIds(card.responsables), has = cur.includes(v);
     const ids = list ? (has ? cur.filter(x=>x!==v) : [...cur, v]) : (has ? [] : [v]);
     if (isHP(card)){
-      if (!ids.length) return refuse('Une tâche hors projet doit garder au moins un responsable.');
+      if (!ids.length) return refuse('Une tâche restreinte doit garder au moins un responsable.');
       if (!canSeeOthers()){
         const m = meObj();
         if (!amResp(card)) return refuse('Seuls ses responsables et le manager peuvent modifier les responsables de cette tâche.');
-        if ((has && m && v===m.id) || (!list && !has)) return refuse('Seul le manager peut confier une tâche hors projet. Vous pouvez la partager en ajoutant un co-responsable.');
+        if ((has && m && v===m.id) || (!list && !has)) return refuse('Seul le manager peut confier une tâche restreinte. Vous pouvez la partager en ajoutant un co-responsable.');
         if (!has && !await askConfirm(`${teamById[v]||'Cette personne'} deviendra co-responsable de « ${card.titre||'cette tâche'} » et pourra la voir.`, 'Partager')){ renderMenu(); return false; }
       }
     }
@@ -842,7 +931,8 @@ async function castVote(card){
 }
 
 /* --- règles du Backlog --- */
-const canEnterSuivi = r => !g(r,'statut') && (PRIO_GROOMEE.test(g(r,'prio')||'') || g(r,'prio')===PRIO_RELEGUE);   // seulement depuis P0–P3 ou Relégué
+const isATransmettre = r => /^a transmettre/.test(norm(g(r,'prio')));
+const canEnterSuivi = r => !g(r,'statut') && (PRIO_GROOMEE.test(g(r,'prio')||'') || g(r,'prio')===PRIO_RELEGUE || isATransmettre(r));   // seulement depuis P0–P3 ou Relégué
 function backlogPrioFor(r){   // colonne du Backlog où part une carte renvoyée du Suivi
   const p = g(r,'prio') || '';
   if (PRIO_GROOMEE.test(p)) return PRIO_RELEGUE;   // déjà travaillée → Relégué
@@ -898,8 +988,8 @@ async function widgetOptsWrite(key, mutate){
   await grist.docApi.applyUserActions([['ModifyColumn', host, m.col, {widgetOptions: JSON.stringify(wo)}]]);
 }
 async function addChoice(key, v){
-  if (!meta[key] || meta[key].choices.includes(v)) return;
-  try { await widgetOptsWrite(key, wo=>wo.choices.push(v)); await reloadMeta(); } catch(e){ /* sans droit sur la structure : la valeur est quand même utilisable */ }
+  if (!meta[key] || meta[key].choices.includes(v)) return true;
+  try { await widgetOptsWrite(key, wo=>wo.choices.push(v)); await reloadMeta(); return true; } catch(e){ return false; }
 }
 async function createPerson(name){
   if (!teamTable || !teamCol) throw new Error('table des responsables introuvable');
@@ -914,7 +1004,7 @@ async function createAndSet(card, key, name){
     catch(e){ flash('Création impossible : '+((e&&e.message)||e)); }
     return;
   }
-  await addChoice(key, name);
+  if (!await addChoice(key, name)){ flash("Seuls les administrateurs du document peuvent créer une nouvelle valeur. Demandez-leur de l'ajouter."); return; }
   if (!L(card,key).includes(name)) await setField(card,key,name);
 }
 
@@ -941,7 +1031,8 @@ function renderMenu(){
   b.bind(el);
 }
 function fieldPicker(cardId){
-  return ()=>({ html: '<div class="mh">Ajouter / modifier</div>' + FIELDS.filter(f=>CARD_KEYS.includes(f.key) && fieldOn(f)).map(f=>`<div class="mi" data-pk="${f.key}">${f.label}</div>`).join(''),
+  const keys = mode==='backlog' ? ['produit','personas','themes','sources'] : CARD_KEYS;
+  return ()=>({ html: '<div class="mh">Ajouter / modifier</div>' + keys.map(k=>FIELDS.find(f=>f.key===k)).filter(f=>f && fieldOn(f)).map(f=>`<div class="mi" data-pk="${f.key}">${f.label}</div>`).join(''),
     bind: el=>el.querySelectorAll('[data-pk]').forEach(x=>x.onclick=()=>{ menu.build = fieldMenu(cardId, x.dataset.pk, true); renderMenu(); }) });
 }
 function fieldMenu(cardId, key, fromPicker){
@@ -951,14 +1042,14 @@ function fieldMenu(cardId, key, fromPicker){
     let html = `<div class="mh">${fromPicker?'<span class="lnk" data-back style="display:inline;padding:0 6px 0 0">←</span>':''}${f.label}</div>`;
     if (f.kind==='date'){
       const d = toDate(g(c,'echeance')), editable = meta.echeance && meta.echeance.type==='Date';
-      html += editable ? `<div class="row"><input type="date" id="mn-date" value="${d?d.toISOString().slice(0,10):''}"></div>${d?'<span class="lnk" data-clr>Effacer la date</span>':''}`
+      html += editable ? `<div class="row"><input type="date" id="mn-date" value="${d?d.toISOString().slice(0,10):''}"></div>${d&&map.echeanceTenue?`<label class="mi"><input type="checkbox" id="mn-ten" ${g(c,'echeanceTenue')?'checked':''}> Échéance tenue</label>`:''}${d?'<span class="lnk" data-clr>Effacer la date</span>':''}`
                        : `<div class="mh" style="text-transform:none">Modifiable seulement pour une colonne de type « Date » (pas « Date et heure »).</div>`;
     } else if (key==='statut' && !g(c,'statut') && !canEnterSuivi(c) && !isHP(c)){
       html += `<div class="mh" style="text-transform:none;max-width:250px">Une carte ne passe en Suivi que depuis une prio P0 à P3 ou « Relégué ». Définissez d'abord sa prio.</div>`;
     } else {
       const multi = isMulti(key), sel = selectedOf(c,key).map(String);
       html += optionsFor(key).map(o=>{ const on = sel.includes(String(o.v));
-        return `<label class="mi ${on?'pick':''}"><input type="${multi?'checkbox':'radio'}" data-opt="${esc(o.v)}" ${on?'checked':''}> ${f.kind==='single'||f.kind==='tags'?tag(o.label, key==='prio'?'prio':''):esc(o.label)}</label>`; }).join('');
+        return `<label class="mi ${on?'pick':''}"><input type="${multi?'checkbox':'radio'}" data-opt="${esc(o.v)}" ${on?'checked':''}> ${f.kind==='single'||f.kind==='tags'?tag(o.label, key==='prio'?'prio':'', shownVal(key,o.label)):esc(o.label)}</label>`; }).join('');
       if (!optionsFor(key).length) html += '<div class="mh" style="text-transform:none">Aucune valeur : ajoutez-en ci-dessous.</div>';
       if (key!=='espace') html += `<div class="sep"></div><div class="row"><input type="text" id="mn-new" placeholder="${key==='responsables'?'Nouvelle personne…':'Nouvelle valeur…'}" autocomplete="off"><button class="btn soft" id="mn-add">+</button></div>
         <span class="lnk" data-mg>⚙ Gérer les valeurs…</span>`;
@@ -974,6 +1065,7 @@ function fieldMenu(cardId, key, fromPicker){
         if (!isMulti(key)) closeMenu();
       });
       const dt = el.querySelector('#mn-date'); if (dt) dt.onchange = ()=>{ const v=dt.value, cur=index.get(cardId); if(cur) update(cur,{echeance: v ? Date.UTC(+v.slice(0,4), +v.slice(5,7)-1, +v.slice(8,10))/1000 : null}); };
+      const ten = el.querySelector('#mn-ten'); if (ten) ten.onchange = ()=>{ const cur=index.get(cardId); if(cur) update(cur,{echeanceTenue:ten.checked}); };
       const cl = el.querySelector('[data-clr]'); if (cl) cl.onclick = ()=>{ const cur=index.get(cardId); if(cur) update(cur,{echeance:null}); closeMenu(); };
       const add = ()=>{ const inp = el.querySelector('#mn-new'); const v = inp.value; inp.value=''; const cur=index.get(cardId); if (cur && v.trim()) createAndSet(cur, key, v); };
       const ab = el.querySelector('#mn-add'); if (ab){ ab.onclick = add; el.querySelector('#mn-new').onkeydown = e=>{ if(e.key==='Enter'){ e.preventDefault(); add(); } }; }
@@ -984,7 +1076,7 @@ function fieldMenu(cardId, key, fromPicker){
 function filterMenu(f){
   return ()=>{
     const opts = filterOptions(f);
-    const html = `<div class="mh">${f.label}</div>` + (opts.map(o=>`<label class="mi"><input type="checkbox" data-fo="${esc(o)}" ${F[f.id].includes(o)?'checked':''}> ${tag(o, f.key==='prio'?'prio':'')}</label>`).join('') || '<div class="mh" style="text-transform:none">Aucune valeur</div>')
+    const html = `<div class="mh">${f.label}</div>` + (opts.map(o=>`<label class="mi"><input type="checkbox" data-fo="${esc(o)}" ${F[f.id].includes(o)?'checked':''}> ${f.key==='personnes' ? esc(o) : tag(o, f.key==='prio'?'prio':'', shownVal(f.key,o))}</label>`).join('') || '<div class="mh" style="text-transform:none">Aucune valeur</div>')
       + `<div class="sep"></div>${F[f.id].length?'<span class="lnk" data-fclr>Tout décocher</span>':''}<span class="lnk" data-mg>⚙ Gérer les valeurs…</span>`;
     return { html, bind: el=>{
       el.querySelectorAll('[data-fo]').forEach(i=>i.onchange=()=>{ const v=i.dataset.fo; F[f.id] = i.checked ? [...F[f.id].filter(x=>x!==v), v] : F[f.id].filter(x=>x!==v); render(); });
@@ -1016,10 +1108,10 @@ function renderManage(){
   const key = manage.key, people = key==='responsables';
   const vals = people ? team.map(t=>({v:t.id,label:t.label})) : optionsFor(key);
   m.style.display = 'block';
-  m.innerHTML = `<h3>Gérer les valeurs <button class="close" id="mg-x" style="float:right">×</button></h3>
+  m.innerHTML = `<h3>Valeurs et couleurs <button class="close" id="mg-x" style="float:right">×</button></h3>
     <div class="mrow"><label>Champ</label><select id="mg-field">${keys.map(k=>`<option value="${k.key}" ${k.key===key?'selected':''}>${k.label}</option>`).join('')}</select></div>
     ${manage.msg?`<div class="mmsg">${esc(manage.msg)}</div>`:''}
-    ${vals.map(o=>`<div class="mrow"><input type="text" data-ren="${esc(o.v)}" value="${esc(o.label)}"><span class="cnt">${usage(key,o.v)} carte(s)</span>
+    ${vals.map(o=>`<div class="mrow">${people?'':`<input type="color" data-colr="${esc(o.v)}" value="${tagColors(o.v,key==='prio'?'prio':'')[1]}" title="Couleur" aria-label="Couleur de ${esc(o.label)}">`}<input type="text" data-ren="${esc(o.v)}" value="${esc(o.label)}"><span class="cnt">${usage(key,o.v)} carte(s)</span>
       <button class="btn ${manage.confirm===String(o.v)?'':'ghost'}" data-del="${esc(o.v)}" style="${manage.confirm===String(o.v)?'background:#c0392b;border-color:#c0392b':''}">${manage.confirm===String(o.v)?'Confirmer ?':'🗑'}</button></div>`).join('') || '<div class="none">Aucune valeur.</div>'}
     <div class="mrow"><input type="text" id="mg-new" placeholder="${people?'Nouvelle personne…':'Nouvelle valeur…'}" autocomplete="off"><button class="btn" id="mg-add">Ajouter</button></div>
     <div class="hint">${people ? 'Les personnes sont celles de la table « '+esc(teamTable)+' ». Supprimer une personne la retire aussi de toutes les cartes.' : 'Les valeurs sont les choix de la colonne Grist. Renommer met aussi à jour toutes les cartes ; supprimer retire la valeur de toutes les cartes. Il faut le droit de modifier la structure du document.'}</div>
@@ -1029,6 +1121,7 @@ function renderManage(){
   const addV = ()=>{ const v = $('mg-new').value.trim(); if (v) runManage(()=>mgAdd(key,v)); };
   $('mg-add').onclick = addV; $('mg-new').onkeydown = e=>{ if(e.key==='Enter'){ e.preventDefault(); addV(); } };
   m.querySelectorAll('[data-ren]').forEach(i=>i.onchange=()=>{ const old = people ? +i.dataset.ren : i.dataset.ren, nv = i.value.trim(); if (nv && nv!==String(people?teamById[old]:old)) runManage(()=>mgRename(key,old,nv)); else renderManage(); });
+  m.querySelectorAll('[data-colr]').forEach(i=>i.onchange=()=>runManage(()=>widgetOptsWrite(key, wo=>{ const co = wo.choiceOptions = wo.choiceOptions||{}; co[i.dataset.colr] = {...(co[i.dataset.colr]||{}), fillColor: lighten(i.value,.8), textColor: i.value}; })));
   m.querySelectorAll('[data-del]').forEach(b=>b.onclick=()=>{
     const v = people ? +b.dataset.del : b.dataset.del;
     if (manage.confirm===String(v)){ runManage(()=>mgDelete(key,v)); }
@@ -1072,12 +1165,10 @@ async function mgRename(key, oldV, newV){
     wo.choices = wo.choices.map(c=>c===oldV?newV:c);
     if (wo.choiceOptions && oldV in wo.choiceOptions){ wo.choiceOptions[newV] = wo.choiceOptions[oldV]; delete wo.choiceOptions[oldV]; }
   }), ...rows]);   // une seule opération : tout passe, ou rien
-  // les couleurs et l'ordre mémorisés suivent la valeur renommée
+  // l'ordre mémorisé suit la valeur renommée
   let changed = false;
-  if (colors.tags[oldV]){ colors.tags[newV]=colors.tags[oldV]; delete colors.tags[oldV]; changed = true; }
-  if (colors.groups[oldV]){ colors.groups[newV]=colors.groups[oldV]; delete colors.groups[oldV]; changed = true; }
-  if (changed) saveColors();
-  for (const m in colOrder){ if ((colOrder[m]||[]).includes(oldV)){ colOrder[m] = colOrder[m].map(x=>x===oldV?newV:x); grist.setOption('order', colOrder); } }
+  for (const m in colOrder){ if ((colOrder[m]||[]).includes(oldV)){ colOrder[m] = colOrder[m].map(x=>x===oldV?newV:x); changed = true; } }
+  if (changed) await saveReglage('order', colOrder);
 }
 async function mgDelete(key, v){
   if (key==='responsables'){
@@ -1105,9 +1196,9 @@ function groupList(){
   const declared = hasDecl ? meta[k].choices : fld.fallback;
   const all = choicesFor(k, fld.fallback).sort((a,b)=>{ const ia=declared.indexOf(a), ib=declared.indexOf(b); return (ia<0?999:ia)-(ib<0?999:ib); });
   if (k==='prio' && mode==='backlog' && !all.includes(PRIO_NOUVEAU)) all.push(PRIO_NOUVEAU);   // les tâches sans prio y sont affichées
-  const ord = colOrder[orderKey()] || [];
+  const ord = mode==='perso' ? myTris().filter(r=>!r.task).sort((a,b)=>a.ord-b.ord).map(r=>r.col) : (colOrder[orderKey()] || []);
   const rank = n => { const i = ord.indexOf(n); return i>=0 ? i : 1000 + all.indexOf(n); };
-  const list = all.map((n,i)=>({name:n, color:colors.groups[n]||defaults[i]||'#999', warn: hasDecl && !declared.includes(n)})).sort((a,b)=>rank(a.name)-rank(b.name));
+  const list = all.map((n,i)=>({name:n, color:(choiceColors[n]&&choiceColors[n][1])||colors.groups[n]||defaults[i]||'#999', warn: hasDecl && !declared.includes(n)})).sort((a,b)=>rank(a.name)-rank(b.name));
   if (mode==='perso' && k==='statut') list.unshift({name:'', label:'À qualifier', color:'#6b7280'});
   else if (records.some(r=>inView(r) && !groupOf(r))) list.push({name:'', label: k==='prio'?'Sans priorité':k==='charge'?'Sans charge':'Sans statut', color:'#bbb'});
   return list;
@@ -1118,28 +1209,47 @@ function moveColumn(from, to){
   const names = before.slice(); const fi = names.indexOf(from); if (fi<0) return;
   names.splice(fi,1); const ti = names.indexOf(to);
   names.splice(fi < before.indexOf(to) ? ti+1 : ti, 0, from);
-  colOrder[orderKey()] = names; grist.setOption('order', colOrder); render();
+  if (mode==='perso'){ saveMyColumns(names); return; }
+  const prev = JSON.parse(JSON.stringify(colOrder));
+  colOrder[orderKey()] = names; render();
+  saveReglage('order', colOrder).then(done=>{ if (!done){ colOrder = prev; render(); } });
 }
 
 /* ============ TRI DES CARTES (dans chaque colonne) ============ */
 const SORTS = [['prio','Prio'],['echeance','Échéance'],['charge','Charge']];
-function sortCards(list){
-  const crit = sortPref.filter(s=>s && s.k && map[s.k]);
+const customSort = () => sortPref.filter(s=>s && s.k && map[s.k]);
+const canManualHere = () => mode==='perso' && groupKey()==='statut' && !persoFor && !!meObj() && side.tris.ok===true;
+function sortCards(list, group){
+  const crit = customSort();
   const rankOf = (r,k)=>{
     if (k==='echeance'){ const d = toDate(g(r,'echeance')); return d ? +d : null; }
     const v = k==='prio' ? prioEff(r) : g(r,k); if (!v) return null;
     const dec = (meta[k] && meta[k].choices && meta[k].choices.length) ? meta[k].choices : FIELDS.find(f=>f.key===k).fallback;
     const i = dec.indexOf(String(v)); return i<0 ? 999 : i;
   };
-  return list.slice().sort((a,b)=>{
-    for (const s of crit){
+  const done = groupKey()==='statut' && STATUTS_FINIS.includes(group);
+  const seq = crit.length ? crit : [{k:'echeance', d: done?'desc':'asc'},{k:'prio',d:'asc'},{k:'charge',d:'asc'}].filter(s=>map[s.k]);
+  const bySeq = (a,b)=>{
+    for (const s of seq){
       const x = rankOf(a,s.k), y = rankOf(b,s.k);
       if (x===y) continue; if (x==null) return 1; if (y==null) return -1;
       return s.d==='desc' ? y-x : x-y;
     }
-    const da = toDate(g(a,'echeance')), db = toDate(g(b,'echeance'));
-    return ((da?+da:9e15)-(db?+db:9e15)) || (a.id-b.id);
-  });
+    return a.id-b.id;
+  };
+  const out = list.slice().sort(bySeq);
+  if (!crit.length && canManualHere()){
+    const pos = new Map(manualCol(group).map(r=>[r.task, r.ord]));
+    if (pos.size) return [...out.filter(r=>!pos.has(r.id)), ...out.filter(r=>pos.has(r.id)).sort((a,b)=>pos.get(a.id)-pos.get(b.id))];   // une nouvelle tâche arrive en haut
+  }
+  return out;
+}
+const SORT_LABELS = {prio:'Prio', echeance:'Échéance', charge:'Charge'};
+function colSub(gr){
+  if (customSort().length) return '';
+  if (canManualHere() && manualCol(gr.name).length) return `Ordre manuel · <button class="lnkc" data-cauto="${esc(gr.name)}">Revenir au tri par défaut</button>`;
+  if (!map.echeance) return '';
+  return groupKey()==='statut' && STATUTS_FINIS.includes(gr.name) ? '↓ échéance la plus récente' : '↑ échéance la plus proche';
 }
 function saveSort(){ sortPref = [0,1,2].map(i=>sortPref[i]||{}); lsSet('sort', sortPref); renderHeader(); renderBoard(); if (menu) renderMenu(); }
 function sortMenu(){
@@ -1147,7 +1257,7 @@ function sortMenu(){
     sortPref = [0,1,2].map(i=>sortPref[i]||{});
     const row = i=>{ const s = sortPref[i];
       return `<div class="row"><select data-sk="${i}"><option value="">${i?'puis par…':'Trier par…'}</option>${SORTS.filter(([k])=>map[k]).map(([k,l])=>`<option value="${k}" ${s.k===k?'selected':''}>${l}</option>`).join('')}</select><button class="fb" data-sd="${i}" title="Sens du tri">${s.d==='desc'?'↓ décroissant':'↑ croissant'}</button></div>`; };
-    return { html: '<div class="mh">Trier les cartes de chaque colonne</div>'+row(0)+row(1)+row(2)+'<div class="sep"></div><span class="lnk" data-sclr>Tri par défaut (échéance)</span>',
+    return { html: `<div class="mh">Tri des cartes</div><div class="mi ${customSort().length?'':'pick'}" data-sclr>Par défaut : ${['echeance','prio','charge'].filter(k=>map[k]).map(k=>SORT_LABELS[k]).join(' › ')}</div><div class="sep"></div><div class="mh">Tri personnalisé (1 à 3 critères)</div>`+row(0)+row(1)+row(2)+`<div class="none" style="padding:4px 6px">Propre à ce navigateur. Il remplace le tri par défaut dans toutes les colonnes.</div>`,
       bind: el=>{
         el.querySelectorAll('[data-sk]').forEach(x=>x.onchange=()=>{ const i=+x.dataset.sk; sortPref[i] = {k:x.value, d:sortPref[i].d||'asc'}; saveSort(); });
         el.querySelectorAll('[data-sd]').forEach(b=>b.onclick=()=>{ const i=+b.dataset.sd; sortPref[i] = {k:sortPref[i].k, d:sortPref[i].d==='desc'?'asc':'desc'}; saveSort(); });
@@ -1198,7 +1308,7 @@ function dateMenu(){
     bind: el=>{ el.querySelector('#f-from').onchange = e=>{ F.from = e.target.value; render(); }; el.querySelector('#f-to').onchange = e=>{ F.to = e.target.value; render(); }; } });
 }
 function settingsMenu(){
-  return ()=>({ html:'<div class="mh">Réglages</div><div class="mi" data-s="mg">✎ Valeurs</div><div class="mi" data-s="diag">🔧 Diagnostic</div><div class="mi" data-s="col">🎨 Couleurs</div>',
+  return ()=>({ html:'<div class="mh">Réglages</div><div class="mi" data-s="mg">🎨 Valeurs et couleurs</div><div class="mi" data-s="col">⏰ Alertes et colonnes</div><div class="mi" data-s="diag">🔧 Diagnostic</div>',
     bind: el=>el.querySelectorAll('[data-s]').forEach(x=>x.onclick=()=>{
       const s = x.dataset.s; closeMenu();
       if (s==='mg') openManage(FIELDS.find(f=>fieldOn(f) && f.kind!=='date') ? (manageKeys()[0]||{}).key : null);
@@ -1216,8 +1326,10 @@ function renderHeader(){
   if (map){
     const gks = groupChoices();
     if (gks.length>1) top += `<label>Grouper par <select id="f-grp">${gks.map(k=>`<option value="${k}" ${groupKey()===k?'selected':''}>${GROUP_LABELS[k]}</option>`).join('')}</select></label>`;
-    const ns = sortPref.filter(s=>s && s.k).length;
-    top += `<button class="fb ${ns?'active':''}" data-anchor="sort" id="sortBtn" title="Trier les cartes de chaque colonne">Tri${ns?` (${ns})`:''} ▾</button>`;
+    const cs = customSort();
+    const defLab = ['echeance','prio','charge'].filter(k=>map[k]).map(k=>SORT_LABELS[k]).join(' › ');
+    top += cs.length ? `<button class="fb sortc" data-anchor="sort" id="sortBtn">Tri personnalisé : ${cs.map(s=>SORT_LABELS[s.k]).join(' › ')} ▾</button><button class="clr" id="sortReset">Revenir au tri par défaut</button>`
+      : `<button class="fb active" data-anchor="sort" id="sortBtn" title="Trier les cartes de chaque colonne">Tri : ${defLab} ▾</button>`;
     if (mode==='perso' && canSeeOthers()){
       const names = team.map(t=>t.label);
       top += `<label title="Par défaut, vos tâches.">Tâches de <select id="f-for"><option value="" ${!persoFor?'selected':''}>Moi${moi?' ('+esc(moi)+')':''}</option><option value="*" ${persoFor==='*'?'selected':''}>Tout le monde</option>${names.filter(n=>n!==moi).map(n=>`<option ${n===persoFor?'selected':''}>${esc(n)}</option>`).join('')}</select></label>`;
@@ -1240,6 +1352,7 @@ function renderHeader(){
   const gp = $('f-grp'); if (gp) gp.onchange = ()=>{ grpBy[mode] = gp.value; lsSet('groups', grpBy); render(); };
   $('bell').onclick = ()=>{ notifOpen = !notifOpen; renderNotifs(); };
   const sb = $('sortBtn'); if (sb) sb.onclick = ()=>openMenu('sort', sortMenu());
+  const sr = $('sortReset'); if (sr) sr.onclick = ()=>{ sortPref = []; saveSort(); };
   const eb = $('echBtn'); if (eb) eb.onclick = ()=>openMenu('f-ech', dateMenu());
   $('setBtn').onclick = ()=>openMenu('settings', settingsMenu());
   document.querySelectorAll('[data-fbtn]').forEach(b=>b.onclick=()=>{ const f = FILTERS.find(x=>x.id===b.dataset.fbtn); openMenu('f-'+f.id, filterMenu(f)); });
@@ -1252,7 +1365,7 @@ function renderHeader(){
 function renderWarn(){
   const parts = [];
   if (map && idNote) parts.push(`<div class="warn"><b>⚠</b> ${esc(idNote)}</div>`);
-  if (map && !map.espace) parts.push(`<div class="warn"><b>⚠</b> Associez la colonne <b>Espace</b> dans la configuration du widget : sans elle, les tâches hors projet apparaissent dans le Suivi et le Backlog.</div>`);
+  if (map && !map.espace) parts.push(`<div class="warn"><b>⚠</b> Associez la colonne <b>Espace</b> dans la configuration du widget : sans elle, les tâches restreintes apparaissent dans le Suivi et le Backlog.</div>`);
   if (map){
     const total = records.length, shown = records.filter(passes).length, inv = records.filter(inView).length;
     if (mode==='corbeille') parts.push(`<div class="info">Corbeille : ces tâches restent dans la table (colonne « Supprimée » cochée). Restaurez une tâche pour la remettre dans le Kanban.</div>`);
@@ -1295,6 +1408,7 @@ function renderDiag(){
     'Commentaires : '+(side.comments.ok===null?'non chargés':side.comments.ok?side.comments.note+' | colonnes '+JSON.stringify(side.comments.cols):'indisponibles – '+side.comments.note),
     'Historique : '+(side.history.ok===null?'non chargé':side.history.ok?side.history.note+' | colonnes '+JSON.stringify(side.history.cols):'indisponible – '+side.history.note),
     'Notifications : '+(side.notifs.ok===null?'non chargées':side.notifs.ok?side.notifs.note+' | colonnes '+JSON.stringify(side.notifs.cols):'indisponibles – '+side.notifs.note),
+    'Réglages : '+(regOk===null?'non chargés':regOk?'table Reglages OK':'table Reglages absente')+' | Mes_tris : '+(side.tris.ok?side.tris.note:side.tris.note||'non chargée'),
     'Moi (selon Grist) : '+(moi||'inconnu')+' | ligne Equipe '+moiId+' | courriel '+((meObj()||{}).email||'?')+' | manager : '+canSeeOthers()+(idNote?' | '+idNote:'')+' | hors projet visibles : '+records.filter(isHP).length+' | tri : '+JSON.stringify(sortPref.filter(s=>s&&s.k)),
     'Cartes affichables dans cette vue : '+(map?records.filter(passes).length:'?'),
     'Première ligne brute : '+(rawFirst?JSON.stringify(rawFirst):'(aucune)').slice(0,400),
@@ -1316,7 +1430,7 @@ function dateBadge(r){
   const d = toDate(g(r,'echeance')); if(!d) return '';
   const statut = g(r,'statut') || '';
   let cls = 'd-grey';
-  if (STATUT_TERMINE.includes(statut)) cls = 'd-ok';
+  if (STATUT_TERMINE.includes(statut) || g(r,'echeanceTenue')) cls = 'd-ok';
   else {
     const diff = Math.round((dayStart(d)-dayStart(new Date()))/86400000);
     if (diff <= thr.red) cls = 'd-red'; else if (diff <= thr.orange) cls = 'd-orange';
@@ -1325,13 +1439,14 @@ function dateBadge(r){
 }
 function cardHtml(r){
   let tags = '';
-  if (isHP(r)) tags += `<button class="hpill" data-cesp="1" data-anchor="ce-${r.id}" title="Changer l'espace">${esc(ESP_HP)} ▾</button>`;
+  if (mode==='perso' && map.espace && !isHP(r)) tags += `<button class="hpill" data-cesp="1" data-anchor="ce-${r.id}" title="Changer l'espace">${esc(ESP_PROJET)} ▾</button>`;
   if (mode==='perso' && !isHP(r) && !g(r,'statut') && g(r,'prio')===PRIO_RELEGUE) tags += '<span class="tag" style="background:#e6e8ec;color:#444">Retour du Suivi</span>';
-  if (mode!=='backlog' && g(r,'prio')) tags += tagX(g(r,'prio'),'prio');
+  if (mode!=='backlog' && g(r,'prio')) tags += tagX(g(r,'prio'),'prio',true);
   if (g(r,'charge')) tags += tagX(g(r,'charge'),'charge');
-  ['etiquettes','personas','produit','themes','sources'].forEach(k=>L(r,k).forEach(t=>tags+=tagX(t,k)));
+  ['produit','themes','etiquettes','personas','sources'].forEach(k=>L(r,k).forEach(t=>tags+=tagX(t,k)));
   if (mode!=='corbeille') tags += `<button class="cplus" data-cplus="1" data-anchor="cp-${r.id}" title="Modifier le statut, la prio, la charge, le responsable ou l'espace">＋</button>`;
   let m = dateBadge(r);
+  if (String(g(r,'description')||'').trim()) m += `<span title="Cette tâche a une description" aria-label="Description">${SVG('<path d="M4 6h16M4 12h16M4 18h10"/>').replace('width="18" height="18"','width="14" height="14"')}</span>`;
   const cl = checklistCount(g(r,'checklist'));
   if (cl.total) m += `<span>☑ ${cl.done}/${cl.total}</span>`;
   const pj = refIds(g(r,'pj')).length; if (pj) m += `<span>📎${pj}</span>`;
@@ -1339,6 +1454,7 @@ function cardHtml(r){
   if (mode==='corbeille' && !isHP(r) && (map.votes||map.votants) && voteCount(r)) m += `<span title="Votes">👍 ${voteCount(r)}</span>`;
   if ((mode==='backlog' || mode==='suivi') && (map.votes||map.votants)) m += `<button class="vote ${hasVoted(r)?'on':''}" data-vote="1" title="${map.votants?(hasVoted(r)?'Retirer mon vote':'Voter (un vote par personne)'):'Voter'}">👍 ${voteCount(r)}</button>`;
   if (mode==='backlog' && canEnterSuivi(r)) m += `<button class="tosuivi" data-tosuivi="1" title="Envoyer dans le Suivi, colonne « ${STATUT_DEFAUT} »">➜ Suivi</button>`;
+  if (mode==='backlog' && isATransmettre(r)) m += `<button class="tosuivi" style="margin-left:0" data-totr="1" title="Passer dans la colonne « Transmis »">➜ Transmis</button>`;
   if (mode==='corbeille') m += `<button class="tosuivi" data-restore="1" title="Remettre la tâche dans le Kanban">↩ Restaurer</button>`;
   const names = L(r,'personnes');
   const av = names.map(n=>`<span class="av" title="${esc(n)}">${esc(initials(n))}</span>`).join('') || (map.responsables && mode!=='corbeille' ? '<span class="av none">+</span>' : '');
@@ -1353,11 +1469,11 @@ function renderBoard(){
   const left = board.scrollLeft, top = board.scrollTop;
   const shown = records.filter(passes);
   board.innerHTML = groupList().map(gr=>{
-    const cards = sortCards(shown.filter(r=>groupOf(r)===gr.name));
+    const cards = sortCards(shown.filter(r=>groupOf(r)===gr.name), gr.name);
     return `<div class="col" data-group="${esc(gr.name)}">
-      <h2 ${gr.name?'draggable="true"':''} data-colh="${esc(gr.name)}" title="Glisser pour déplacer la colonne"><span class="grip">⋮⋮</span><span class="dot" style="background:${gr.color}"></span>${esc(gr.label||gr.name)}${gr.warn?'<span class="warnc" title="Valeur absente des choix de la colonne Grist : saisie par erreur ? Corrigez-la dans la table.">⚠</span>':''}<span class="count">${cards.length}</span></h2>
-      ${cards.map(cardHtml).join('')}
-      ${gr.name?`<button class="add" data-add="${esc(gr.name)}">+ Nouvelle carte</button>`:''}</div>`;
+      <h2 ${gr.name?'draggable="true"':''} data-colh="${esc(gr.name)}" title="Glisser pour déplacer la colonne"><span class="grip">⋮⋮</span><span class="dot" style="background:${gr.color}"></span>${esc(gr.label||gr.name)}${gr.warn?'<span class="warnc" title="Valeur absente des choix de la colonne Grist : saisie par erreur ? Corrigez-la dans la table.">⚠</span>':''}<span class="count">${cards.length}</span>${(mode!=='corbeille' && (gr.name || (mode==='perso' && groupKey()==='statut'))) ? `<button class="cadd" data-add="${esc(gr.name)}" title="Nouvelle carte" aria-label="Nouvelle carte dans ${esc(gr.label||gr.name)}">+</button>` : ''}</h2>
+      ${colSub(gr) ? `<div class="csub">${colSub(gr)}</div>` : ''}
+      ${cards.map(cardHtml).join('')}</div>`;
   }).join('');
   board.scrollLeft = left; board.scrollTop = top;
   wire();
@@ -1369,31 +1485,21 @@ function render(){
 function rebuild(){ if (map && mode==='corbeille' && !map.supprimee) mode = 'suivi'; index = new Map(records.map(r=>[r.id,r])); }
 
 /* ---- Panneau de personnalisation des couleurs ---- */
-function saveColors(){ grist.setOption('colors', colors); }
 function renderPanel(){
   const p = $('panel');
   if (!panelOpen || !map){ p.style.display='none'; return; }
   p.style.display = 'block';
-  const groups = groupList().filter(x=>x.name);
-  const tagVals = [...new Set(FIELDS.filter(f=>f.kind!=='date'&&f.key!=='responsables'&&f.key!=='statut').flatMap(f=>records.flatMap(r=>L(r,f.key))))].sort((a,b)=>a.localeCompare(b,'fr'));
-  p.innerHTML = `<button class="close" id="pclose">×</button><b>Personnalisation</b>
-    <h3>Colonnes de la vue « ${mode==='backlog'?'Backlog':'Suivi'} »</h3>
-    <div style="font-size:11px;color:#666">Pour changer l'ordre, faites glisser le titre d'une colonne.</div>
-    ${groups.map(gr=>`<div class="row"><input type="color" data-grp="${esc(gr.name)}" value="${gr.color.length===7?gr.color:'#999999'}"> ${esc(gr.name)}</div>`).join('')}
-    <div class="row"><button id="oreset">Rétablir l'ordre d'origine</button></div>
-    <h3>Étiquettes (couleur de base : le fond est éclairci automatiquement)</h3>
-    ${tagVals.map(v=>`<div class="row"><input type="color" data-tag="${esc(v)}" value="${colors.tags[v]||defaultTagColors(v,'')[1]}"> ${tag(v)}</div>`).join('')}
+  p.innerHTML = `<button class="close" id="pclose">×</button><b>Alertes et colonnes</b>
     <h3>Alertes d'échéance</h3>
     <div class="row">Orange à <input type="number" id="t-orange" min="0" value="${thr.orange}"> jour(s) ou moins</div>
     <div class="row">Rouge à <input type="number" id="t-red" min="0" value="${thr.red}"> jour(s) ou moins</div>
-    <div class="row"><button id="creset">Rétablir les couleurs par défaut</button></div>`;
+    <h3>Ordre des colonnes</h3>
+    <div style="font-size:11px;color:#666">${mode==='perso'?"Dans Mes tâches, l'ordre vous est propre.":"Dans le Suivi et le Backlog, l'ordre est commun et réservé aux administrateurs."} Faites glisser le titre d'une colonne pour la déplacer.</div>
+    <div class="row"><button id="oreset">Rétablir l'ordre d'origine</button></div>`;
   $('pclose').onclick = ()=>{ panelOpen=false; renderPanel(); };
-  p.querySelectorAll('[data-grp]').forEach(i=>{ i.oninput = ()=>{ colors.groups[i.dataset.grp]=i.value; renderBoard(); }; i.onchange = ()=>saveColors(); });
-  p.querySelectorAll('[data-tag]').forEach(i=>{ i.oninput = ()=>{ colors.tags[i.dataset.tag]=i.value; renderBoard(); }; i.onchange = ()=>{ saveColors(); renderPanel(); }; });
-  $('oreset').onclick = ()=>{ delete colOrder[orderKey()]; grist.setOption('order', colOrder); render(); };
-  $('t-orange').onchange = e=>{ thr.orange=+e.target.value; grist.setOption('orange',thr.orange); renderBoard(); };
-  $('t-red').onchange = e=>{ thr.red=+e.target.value; grist.setOption('red',thr.red); renderBoard(); };
-  $('creset').onclick = ()=>{ colors={groups:{},tags:{}}; saveColors(); render(); };
+  $('oreset').onclick = async ()=>{ if (mode==='perso'){ await saveMyColumns([]); render(); return; } const prev = JSON.parse(JSON.stringify(colOrder)); delete colOrder[orderKey()]; render(); if (!await saveReglage('order', colOrder)){ colOrder = prev; render(); } };
+  $('t-orange').onchange = e=>{ thr.orange=+e.target.value; renderBoard(); saveReglage('orange',thr.orange); };
+  $('t-red').onchange = e=>{ thr.red=+e.target.value; renderBoard(); saveReglage('red',thr.red); };
 }
 
 /* ============ NOUVELLE CARTE ============ */
@@ -1405,7 +1511,7 @@ function openNewPop(group){
     <div class="row" style="justify-content:flex-end"><button id="ncancel">Annuler</button><button class="primary" id="nok">Créer</button></div>`;
   const perso = mode==='perso';
   const forOther = perso && canSeeOthers() && persoFor && persoFor!=='*' ? team.find(t=>t.label===persoFor) : null;
-  if (perso) p.querySelector('.hint').textContent = '('+group+' · hors projet, au nom de '+(forOther ? forOther.label : 'vous')+')';
+  if (perso) p.querySelector('.hint').textContent = '('+(group ? group+' · restreinte' : 'À qualifier · projet')+', au nom de '+(forOther ? forOther.label : 'vous')+')';
   const ok = async ()=>{
     const t = $('nt').value.trim();
     if (!t) return; closePop();
@@ -1420,6 +1526,7 @@ function openNewPop(group){
     if (mode==='backlog' && gk!=='prio' && map.prio) f[map.prio] = PRIO_NOUVEAU;
     if (map.espace) f[map.espace] = perso ? ESP_HP : ESP_PROJET;
     if (perso) f[map.responsables] = isListRef() ? ['L', me.id] : me.id;
+    if (perso && !group){ delete f[map[gk]]; f[map.espace] = ESP_PROJET; if (map.prio) f[map.prio] = PRIO_NOUVEAU; }   // À qualifier : tâche de projet sans statut
     const res = await actRes([['AddRecord', host, null, f]]);
     const id = res && res.retValues && res.retValues[0];
     if (typeof id==='number'){
@@ -1463,11 +1570,12 @@ async function downloadAttachment(id){
 }
 
 /* ============ FICHE DE LA CARTE (version compacte) ============ */
-function openFiche(id){ if (id!==openId) drafts = {}; openId = id; delConfirm = null; delcId = null; descEdit = null; panelOpen = false; ficheSig = ''; if (map && map.pj) loadAttachMeta(); render(); }
+let ficheTop = false;
+function openFiche(id){ if (id!==openId){ drafts = {}; ficheTop = true; } openId = id; delConfirm = null; delcId = null; descEdit = null; panelOpen = false; ficheSig = ''; if (map && map.pj) loadAttachMeta(); render(); }
 function closeFiche(){ if (openId===null) return; openId = null; delConfirm = null; descEdit = null; ficheSig = ''; $('fiche').style.display='none'; closeMenu(); renderBoard(); }
 function refreshFiche(){ ficheSig=''; renderFiche(); renderMenu(); }
 function sigOf(r){
-  return JSON.stringify([uploadNote, delcId, r.espace, metaTick, delConfirm===r.id, descEdit===r.id, side.comments.tick, side.history.tick, moi, r.titre, g(r,'statut'), g(r,'prio'), g(r,'charge'), g(r,'description'), g(r,'checklist'), g(r,'echeance'), g(r,'responsables'), g(r,'personnes'), g(r,'pj'), g(r,'votes'), g(r,'votants'),
+  return JSON.stringify([uploadNote, delcId, r.espace, g(r,'echeanceTenue'), metaTick, delConfirm===r.id, descEdit===r.id, side.comments.tick, side.history.tick, moi, r.titre, g(r,'statut'), g(r,'prio'), g(r,'charge'), g(r,'description'), g(r,'checklist'), g(r,'echeance'), g(r,'responsables'), g(r,'personnes'), g(r,'pj'), g(r,'votes'), g(r,'votants'),
     g(r,'creePar'), g(r,'creeLe'), g(r,'modifPar'), g(r,'modifLe'), isDel(r), ...FIELDS.filter(f=>f.kind==='tags').map(f=>L(r,f.key))]);
 }
 const CHEVRON = '<svg class="chev" aria-hidden="true" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>';
@@ -1488,7 +1596,7 @@ function propsHtml(r){
   const btn = f=>{ const ic = PC_ICONS[f.key] ? SVG(PC_ICONS[f.key]).replace('width="18" height="18"','width="13" height="13"') : '';
     return `<button class="pb" data-anchor="fd-${f.key}" data-dd="${f.key}">${ic}<span class="pln">${esc(f.label)}</span>${CHEVRON}</button>`; };
   const grid = fs => fs.length ? `<div class="pgrid" style="grid-template-columns:repeat(${fs.length},minmax(0,1fr))">${fs.map(btn).join('')}</div>` : '';
-  const main = row(['statut','prio','charge','responsables','echeance']), other = row(['produit','personas','themes','etiquettes','sources']);
+  const main = row(['prio','charge','echeance','responsables','statut']), other = row(['produit','personas','themes','etiquettes','sources']);
   const vals = [...main, ...other].map(f=>{ const v = propValue(r,f); return v ? `<div class="sg"><div class="lbl">${esc(f.label)}</div><div class="vals">${v}</div></div>` : ''; }).join('');
   return grid(main) + grid(other) + (vals ? `<div class="psum">${vals}</div>` : '');
 }
@@ -1518,13 +1626,14 @@ function commentsHtml(r){
       <div id="rp-${c.id}" style="display:none"><textarea class="cmt" data-draft="reply-${c.id}" placeholder="Votre réponse… (@ pour citer quelqu'un)">${esc(drafts['reply-'+c.id]||'')}</textarea>
         <div class="row"><button class="btn ghost" data-at="reply-${c.id}" data-anchor="at-reply-${c.id}">@</button><button class="btn" data-send="${c.id}">Répondre</button></div></div>
       <div class="rep">${kids(c.id).map(one).join('')}</div></div></div>`; };
-  const top = kids(0).concat(list.filter(c=>c.parent && !list.some(p=>p.id===c.parent)));   // réponses orphelines affichées en haut
-  return `${top.map(one).join('') || '<div class="none">Aucun commentaire.</div>'}
-    <div style="margin-top:12px"><textarea class="cmt" data-draft="new" placeholder="Écrire un commentaire… (@ pour citer quelqu'un)">${esc(drafts['new']||'')}</textarea>
+  const newest = (a,b)=>(a.date&&b.date) ? (b.date-a.date) : (b.id-a.id);
+  const top = kids(0).concat(list.filter(c=>c.parent && !list.some(p=>p.id===c.parent))).sort(newest);   // plus récents en haut ; dans un fil, les réponses restent chronologiques
+  return `<div style="margin-bottom:10px"><textarea class="cmt" data-draft="new" placeholder="Écrire un commentaire… (@ pour citer quelqu'un)">${esc(drafts['new']||'')}</textarea>
       <div class="row"><button class="btn ghost" data-at="new" data-anchor="at-new">@ Citer</button><span class="grow"></span><button class="btn" id="cm-send">Publier</button></div>
-      </div>`;
+      </div>
+    ${top.map(one).join('') || '<div class="none">Aucun commentaire.</div>'}`;
 }
-const HP_CITE_MSG = "Tâche hors projet : seuls ses responsables et le manager y ont accès. Pour citer quelqu'un d'autre, ajoutez-le d'abord comme co-responsable.";
+const HP_CITE_MSG = "Tâche restreinte : seuls ses responsables et le manager y ont accès. Pour citer quelqu'un d'autre, ajoutez-le d'abord comme co-responsable.";
 function atMenu(draftKey, cardId){
   return ()=>{
     const c = index.get(cardId), hp = c && isHP(c), people = c ? team.filter(t=>canAccess(c,t)) : team;
@@ -1610,7 +1719,7 @@ function renderFiche(){
       <div class="sec" id="fp-hist"><div class="sh">🕘 Historique<span class="sub">${side.history.ok?historyOf(id).length:''}</span></div>${historyHtml(r)}</div>
       ${delHtml}
     </div>`;
-  f.scrollTop = keepScroll;
+  f.scrollTop = ficheTop ? 0 : keepScroll; ficheTop = false;
   applyFicheFocus();
   if (keep){ const el = f.querySelector(keep.sel); if (el){ el.value = keep.v; el.focus(); try { el.setSelectionRange(keep.s, keep.e); } catch(e){} } }
 
@@ -1641,8 +1750,7 @@ function renderFiche(){
   const ds = $('fp-desc');
   if (ds){
     const saveDesc = ()=>{ const c=cur(); if (c && ds.value !== (g(c,'description')||'')) update(c,{description: ds.value}); };
-    const endEdit = ()=>{ const wasEditing = descEdit===id; saveDesc(); descEdit = null; if (wasEditing) refreshFiche(); };
-    ds.onchange = saveDesc;
+    const endEdit = ()=>{ const wasEditing = descEdit===id; descEdit = null; saveDesc(); if (wasEditing) refreshFiche(); };   // enregistrer pendant la saisie remettrait le curseur dans le champ
     ds.onblur = ()=>setTimeout(()=>{ if (!ds.isConnected || document.activeElement===ds) return; if (descEdit===id) endEdit(); }, 0);   // champ remplacé par une reconstruction de la fiche : on reste en modification
     ds.onkeydown = e=>{ if (e.key==='Escape'){ e.preventDefault(); e.stopPropagation(); endEdit(); } };
     f.querySelectorAll('[data-md]').forEach(b=>{
@@ -1730,12 +1838,12 @@ async function sendNotifs(list){
   try { await grist.docApi.applyUserActions(acts); }
   catch(e){ flash("Votre modification est enregistrée, mais les notifications n'ont pas pu être créées : "+((e&&e.message)||e)); }
 }
-const typeKey = t => ({mention:'mention', assignation:'assignation', modification:'modification', reponse:'reponse', commentaire:'commentaire'}[norm(t)] || 'modification');
+const typeKey = t => ({mention:'mention', assignation:'assignation', modification:'modification', reponse:'reponse', commentaire:'commentaire', activite:'activite'}[norm(t)] || 'modification');
 function dueItems(){
   const me = meObj(); if (!me || !map || !map.echeance) return [];
   const out = [], today = dayStart(new Date());
   records.forEach(r=>{
-    if (isDel(r) || !(g(r,'statut') || isHP(r))) return;
+    if (isDel(r) || !(g(r,'statut') || isHP(r)) || g(r,'echeanceTenue')) return;
     if (STATUT_TERMINE.includes(g(r,'statut')) || g(r,'statut')==='Abandonné') return;
     if (!refIds(r.responsables).includes(me.id) && !L(r,'personnes').includes(me.label)) return;
     const d = toDate(g(r,'echeance')); if (!d) return;
@@ -1751,6 +1859,12 @@ function notifItems(){
   const items = [], open = {};
   rows.forEach(n=>{
     const type = typeKey(n.type), k = n.task+'|'+n.author;
+    if (type==='activite' && n.task){   // regroupée par tâche
+      const ga = open['a'+n.task];
+      if (ga){ ga.ids.push(n.id); ga.unread = ga.unread || !n.read; if (n.text && !ga.texts.includes(n.text)) ga.texts.push(n.text); return; }
+      const ia = {key:'n'+n.id, type, ids:[n.id], taskId:n.task, commentId:0, author:'', texts:n.text?[n.text]:[], date:n.date, oldest:n.date, unread:!n.read};
+      items.push(ia); open['a'+n.task] = ia; return;
+    }
     const g0 = type==='modification' && n.task ? open[k] : null;
     if (g0 && g0.oldest && n.date && (g0.oldest-n.date)<=GROUP_MS){   // regroupement sur 5 minutes
       g0.ids.push(n.id); g0.oldest = n.date; g0.unread = g0.unread || !n.read; if (n.text && !g0.texts.includes(n.text)) g0.texts.push(n.text); return;
@@ -1772,6 +1886,7 @@ function notifTitle(it){
   switch (it.type){
     case 'mention': return `${a} vous a mentionné(e) dans ${t}`;
     case 'assignation': return `${a} vous a ajouté(e) comme responsable de ${t}`;
+    case 'activite': return `Activité sur ${t}`;
     case 'reponse': return `${a} a répondu à votre commentaire dans ${t}`;
     case 'commentaire': return `${a} a commenté ${t}`;
     case 'echeance': return it.diff===0 ? `${t} arrive à échéance aujourd'hui` : `${t} arrive à échéance demain`;
@@ -1791,7 +1906,7 @@ function openNotif(it){
   notifOpen = false; hideToast();
   markRead([it]);
   if (!it.taskId || !index.has(it.taskId)){ flash("Cette tâche n'existe plus ou ne vous est plus accessible."); return; }
-  ficheFocus = it.commentId ? {sel:'#cm-'+it.commentId} : it.type==='modification' ? {sel:'#fp-hist'} : null;
+  ficheFocus = it.commentId ? {sel:'#cm-'+it.commentId} : (it.type==='modification' || it.type==='activite') ? {sel:'#fp-hist'} : null;
   if (ficheFocus) ficheFocus.until = Date.now()+6000;
   grist.setCursorPos({rowId:it.taskId}).catch(()=>{});
   openFiche(it.taskId);
@@ -1814,12 +1929,13 @@ function maybeToast(items){   // une nouvelle assignation est signalée sans att
 }
 function renderNotifs(){
   const bell = $('bell'), panel = $('notifs'); if (!bell) return;
-  const items = notifItems(), un = items.filter(i=>i.unread).length;
+  const all = notifItems(), mine = all.filter(i=>i.type!=='activite'), acti = all.filter(i=>i.type==='activite');
+  const items = notifTab==='act' ? acti : mine, un = mine.filter(i=>i.unread).length, unA = acti.filter(i=>i.unread).length;
   bell.className = (notifOpen ? 'on ' : '') + (un ? 'has' : '');
   bell.title = un ? `${un} notification(s) non lue(s)` : 'Notifications';
   bell.setAttribute('aria-label', bell.title); bell.setAttribute('aria-expanded', String(notifOpen));
   bell.innerHTML = SVG('<path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/>') + (un ? `<span class="nb">${un>99?'99+':un}</span>` : '');
-  maybeToast(items);
+  maybeToast(mine);
   if (!notifOpen){ panel.style.display='none'; return; }
   panel.style.display = 'flex';
   const me = meObj(), r = bell.getBoundingClientRect();
@@ -1831,15 +1947,16 @@ function renderNotifs(){
     : !me ? esc(idNote || "Votre compte Grist n'est pas reconnu.") : notifFilter==='unread' ? 'Aucune notification non lue.' : 'Aucune notification.';
   const list = panel.querySelector('.nlist'), keepTop = list ? list.scrollTop : 0;
   panel.innerHTML = `<div class="nh"><b>Notifications</b><button class="lnkb" id="n-all">Tout marquer comme lu</button></div>
-    <div class="nf">${fb('n-f-all','Toutes',notifFilter==='all')}${fb('n-f-un',`Non lues (${un})`,notifFilter==='unread')}</div>
+    <div class="nf">${fb('n-t-me',`Pour moi (${un})`,notifTab==='me')}${fb('n-t-act',`Activité (${unA})`,notifTab==='act')}<span style="flex:1"></span>${fb('n-f-un','Non lues seulement',notifFilter==='unread')}</div>
     <div class="nlist">${shown.map((it,i)=>{ const T = NOTIF_TYPES[it.type]; return `<button class="ni${it.unread?' unread':''}${it.type==='assignation'&&it.unread?' assign':''}" data-ni="${i}">${icon(it.type)}<span class="bd">
         <span class="k">${it.type==='assignation'?`<b>${T.label}</b>`:esc(T.label)}${it.date&&!it.due?' · '+esc(relTime(it.date)):''}${it.ids.length>1?` · ${it.ids.length} changements`:''}</span>
         <span class="t">${esc(notifTitle(it))}</span>${it.texts.length?`<span class="d">${esc(it.texts.join(' · '))}</span>`:''}</span>${it.unread?'<span class="pt" title="Non lue"></span>':''}</button>`; }).join('') || `<div class="msg" style="padding:24px 14px;text-align:center">${empty}</div>`}</div>
     <div class="nfoot">${side.notifs.ok===false?`<div style="color:#a3121d;margin-bottom:4px">Table « ${TABLES.notifs.table} » inutilisable : ${esc(side.notifs.note)}</div>`:''}${me?`Vous êtes <b>${esc(me.label)}</b>`:'Compte non reconnu'}</div>`;
   const nl = panel.querySelector('.nlist'); if (nl) nl.scrollTop = keepTop;
   $('n-all').onclick = ()=>markRead(items);
-  $('n-f-all').onclick = ()=>{ notifFilter='all'; renderNotifs(); };
-  $('n-f-un').onclick = ()=>{ notifFilter='unread'; renderNotifs(); };
+  $('n-t-me').onclick = ()=>{ notifTab='me'; renderNotifs(); };
+  $('n-t-act').onclick = ()=>{ notifTab='act'; renderNotifs(); };
+  $('n-f-un').onclick = ()=>{ notifFilter = notifFilter==='unread' ? 'all' : 'unread'; renderNotifs(); };
   panel.querySelectorAll('[data-ni]').forEach(b=>b.onclick=()=>openNotif(shown[+b.dataset.ni]));
 }
 
@@ -1864,17 +1981,29 @@ function wire(){
   document.querySelectorAll('.col').forEach(col=>{
     col.ondragover = e=>{ e.preventDefault(); col.classList.add(isColDrag(e)?'colover':'over'); };
     col.ondragleave = ()=>col.classList.remove('over','colover');
-    col.ondrop = e=>{
+    col.ondrop = async e=>{
       e.preventDefault(); col.classList.remove('over','colover');
       if (isColDrag(e)){ moveColumn(e.dataTransfer.getData('application/x-col'), col.dataset.group); return; }
       if (mode==='corbeille') return;
       const r = index.get(+(e.dataTransfer.getData('text/plain') || dragId)); if(!r) return;
-      if (mode==='perso' && groupKey()==='statut'){
-        const target = col.dataset.group;
-        if (!target){ if (isHP(r)) flash("Une tâche hors projet garde toujours un statut."); else if (g(r,'statut')) sendBack(r); return; }
+      const target = col.dataset.group || '', same = groupOf(r)===target;
+      if (mode==='perso' && groupKey()==='statut' && !same){
+        if (!target){ if (isHP(r)) flash("Une tâche restreinte garde toujours un statut."); else if (g(r,'statut')) sendBack(r); return; }
         if (!isHP(r) && !g(r,'statut') && !canEnterSuivi(r)){ flash("Une tâche à qualifier ne passe au Suivi que depuis une prio P0 à P3 ou « Relégué ». Définissez d'abord sa prio."); return; }
       }
-      update(r, {[groupKey()]: col.dataset.group || null});
+      let ids = null;
+      if (canManualHere() && !customSort().length){
+        const others = [...col.querySelectorAll('.card')].filter(x=>+x.dataset.id!==r.id);
+        const at = others.findIndex(x=>{ const b = x.getBoundingClientRect(); return e.clientY < b.top + b.height/2; });
+        ids = others.map(x=>+x.dataset.id); ids.splice(at<0 ? ids.length : at, 0, r.id);
+      }
+      if (same){
+        if (ids) saveManual(target, ids);
+        else if (mode==='perso' && customSort().length) flash("Retirez le tri personnalisé pour ordonner les cartes à la main.");
+        return;
+      }
+      await update(r, {[groupKey()]: target || null});
+      if (ids) saveManual(target, ids);
     };
   });
   document.querySelectorAll('[data-add]').forEach(b=>b.onclick=()=>openNewPop(b.dataset.add));
@@ -1884,6 +2013,8 @@ function wire(){
   document.querySelectorAll('.card [data-rm]').forEach(x=>x.onclick=e=>{ e.stopPropagation(); const c=cardOf(x); if (c) removeValue(c, x.dataset.rm, x.dataset.val); });
   document.querySelectorAll('[data-vote]').forEach(b=>b.onclick=()=>castVote(cardOf(b)));
   document.querySelectorAll('[data-restore]').forEach(b=>b.onclick=()=>restoreTask(cardOf(b)));
+  document.querySelectorAll('[data-totr]').forEach(b=>b.onclick=()=>{ const c = cardOf(b); if (c) update(c, {prio:'Transmis'}); });
+  document.querySelectorAll('[data-cauto]').forEach(b=>b.onclick=e=>{ e.stopPropagation(); resetManual(b.dataset.cauto); });
   document.querySelectorAll('[data-tosuivi]').forEach(b=>b.onclick=()=>{ const c = cardOf(b); if (c && canEnterSuivi(c)) update(c, {statut:STATUT_DEFAUT}); });
 }
 document.addEventListener('click', e=>{
@@ -1912,10 +2043,11 @@ grist.onOptions(o=>{
     if (o && o.groups) grpBy = {...grpBy, ...o.groups};
     else if (o && (o.group==='prio' || o.group==='statut')) grpBy.suivi = grpBy.perso = o.group;
   }
+  // Anciennes options : lues comme valeurs de départ. Les réglages vivent désormais dans Reglages et les choix des colonnes.
   if (o && o.colors) colors = {groups:o.colors.groups||{}, tags:o.colors.tags||{}};
-  if (o && o.order) colOrder = o.order;
-  if (o && o.orange != null) thr.orange = Number(o.orange);
-  if (o && o.red != null) thr.red = Number(o.red);
+  if (o && o.order && !regHas.order) colOrder = o.order;
+  if (o && o.orange != null && !regHas.orange) thr.orange = Number(o.orange);
+  if (o && o.red != null && !regHas.red) thr.red = Number(o.red);
   render();
 });
 let commentsStarted = false;
